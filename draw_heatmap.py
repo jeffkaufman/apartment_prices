@@ -2,20 +2,23 @@ import Image
 import sys
 import math
 
-MAX_LAT=42.43519362413287
-MIN_LAT=42.255594
-MIN_LON=-71.18282318115234
-MAX_LON=-70.9758
+# set boundaries in query_padmapper
+from query_padmapper import MAX_LAT, MAX_LON, MIN_LAT, MIN_LON
 
-MODE = "INVERTED_DISTANCE_WEIGHTED_AVERAGE"
-#MODE = "K_NEAREST_NEIGHBORS"
-
-K=5
-
+# change these to change how detailed the generated image is
+# (1000x1000 is good, but very slow)
 MAX_X=100
 MAX_Y=100
 
+# at what distance should we stop making predictions?
 IGNORE_DIST=0.01
+
+# this is a good waty
+MODE = "INVERTED_DISTANCE_WEIGHTED_AVERAGE"
+#MODE = "K_NEAREST_NEIGHBORS"
+
+# this only affects k_nearest mode
+K=5
 
 def pixel_to_ll(x,y):
     delta_lat = MAX_LAT-MIN_LAT
