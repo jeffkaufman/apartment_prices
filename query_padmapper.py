@@ -72,7 +72,7 @@ def query(kwargs):
     return apts
 
 def start():
-    kwargs = dict(k,v for k,v in DEFAULTS.items())
+    kwargs = dict((k,v) for (k,v) in DEFAULTS.items())
     kwargs['southLat']=MIN_LAT
     kwargs['westLong']=MIN_LON
     kwargs['northLat']=MAX_LAT
@@ -80,7 +80,7 @@ def start():
 
     seen_ids = set()
 
-    with open("apts.txt", w) as outf:
+    with open("apts.txt", 'w') as outf:
         for rent in range(100,10000,25):
             for bedrooms in range(10):
                 kwargs['minRent'] = rent-25
