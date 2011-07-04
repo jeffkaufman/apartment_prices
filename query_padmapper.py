@@ -98,4 +98,10 @@ def start():
                 time.sleep(.5)
 
 if __name__=="__main__":
-    start(*sys.argv[1:])
+    print """
+The guy who wrote padmapper says this tool puts a pretty heavy load on his server and he
+would rather it was run no more than once a month.  If you're just looking for some
+apartment data, I've put some on apts.txt, which is for boston in june.
+"""
+
+    # start(*sys.argv[1:])
