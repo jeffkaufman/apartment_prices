@@ -8,6 +8,7 @@ MAX_LAT=42.4351936
 MIN_LON=-71.1828231
 MAX_LON=-70.975800
 
+MAX_RENT=8050
 
 DEFAULTS = {
     'cities': 'false',
@@ -48,7 +49,7 @@ def query(kwargs):
     assert 'westLong' in kwargs
     assert 'southLat' in kwargs
 
-    url='http://www.padmapper.com/reloadMarkersJSON.php'
+    url='https://www.padmapper.com/reloadMarkersJSON.php'
 
     full_url = '%s?%s' % (url, '&'.join('%s=%s' % (k,v) for (k,v) in kwargs.items()))
 
@@ -81,7 +82,7 @@ def start():
     seen_ids = set()
 
     with open("apts.txt", 'w') as outf:
-        for rent in range(100,10000,25):
+        for rent in range(100,MAX_RENT,25):
             for bedrooms in range(10):
                 kwargs['minRent'] = rent-25
                 kwargs['maxRent'] = rent
