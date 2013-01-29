@@ -100,9 +100,9 @@ def start():
 
 if __name__=="__main__":
     print """
-The guy who wrote padmapper says this tool puts a pretty heavy load on his server and he
+The guy who wrote Padmapper says this tool puts a pretty heavy load on his server and he
 would rather it was run no more than once a month.  If you're just looking for some
-apartment data, I've put some on apts.txt, which is for boston in june.
+apartment data, I've put some in apts-2013-01-29, which is for Boston in January 2013.
 """
 
     # start(*sys.argv[1:])
