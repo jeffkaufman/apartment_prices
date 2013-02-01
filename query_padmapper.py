@@ -85,6 +85,7 @@ def start():
     epoch_timestamp = int(time.mktime(time.gmtime()))
     with open("apts-%s.txt" % epoch_timestamp, 'w') as outf:
         for rent in range(100,MAX_RENT,25):
+            print "querying from $%s ..." % rent
             for bedrooms in range(10):
                 kwargs['minRent'] = rent-25
                 kwargs['maxRent'] = rent
@@ -100,11 +101,11 @@ def start():
 
                 time.sleep(2)
 
+
 if __name__=="__main__":
     print """
 The guy who wrote Padmapper says this tool puts a pretty heavy load on his server and he
 would rather it was run no more than once a month.  If you're just looking for some
 apartment data, I've put some in apts-2013-01-29, which is for Boston in January 2013.
 """
-
     # start(*sys.argv[1:])
