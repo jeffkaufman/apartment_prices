@@ -2,13 +2,14 @@ import time
 import sys
 import urllib
 import json
+import time
 
 MIN_LAT=42.255594
 MAX_LAT=42.4351936
 MIN_LON=-71.1828231
 MAX_LON=-70.975800
 
-MAX_RENT=8050
+MAX_RENT=6050
 
 DEFAULTS = {
     'cities': 'false',
@@ -81,7 +82,8 @@ def start():
 
     seen_ids = set()
 
-    with open("apts.txt", 'w') as outf:
+    epoch_timestamp = int(time.mktime(time.gmtime()))
+    with open("apts-%s.txt" % epoch_timestamp, 'w') as outf:
         for rent in range(100,MAX_RENT,25):
             for bedrooms in range(10):
                 kwargs['minRent'] = rent-25
@@ -96,7 +98,7 @@ def start():
                         sys.stdout.flush()
                         seen_ids.add(apt_id)
 
-                time.sleep(.5)
+                time.sleep(2)
 
 if __name__=="__main__":
     print """
