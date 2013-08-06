@@ -33,7 +33,7 @@ def pixel_to_ll(x,y):
     lon = MIN_LON + x_frac*delta_lon
     lat = MAX_LAT - y_frac*delta_lat
 
-    
+
     calc_x, calc_y = ll_to_pixel(lat, lon)
 
     if abs(calc_x-x) > 1 or abs(calc_y-y) > 1:
@@ -57,10 +57,10 @@ def ll_to_pixel(lat,lon):
 
     x = int(lon_frac*MAX_X)
     y = int((1-lat_frac)*MAX_Y)
-        
+
     return x,y
 
-def load_prices(*fs):
+def load_prices(fs, price_per_room=False):
     prices = []
     seen = set()
     for f in fs:
@@ -70,19 +70,26 @@ def load_prices(*fs):
                     continue
 
                 rent, bedrooms, apt_id, lon, lat = line.strip().split()
-                rent, bedrooms = int(rent), int(bedrooms)
-            
-                if bedrooms < 1:
-                    bedrooms = 1
-
-                price = rent / bedrooms
 
                 if apt_id in seen:
                     continue
                 else:
                     seen.add(apt_id)
-            
-                if price < 300:
+
+                rent, bedrooms = int(rent), int(bedrooms)
+
+                assert bedrooms >= 0
+                rooms = bedrooms + 1
+
+                if bedrooms < 1:
+                    bedrooms = 1 # singles
+
+                if price_per_room:
+                    price = rent / rooms
+                else:
+                    price = rent / bedrooms
+
+                if price < 150:
                     continue
 
                 prices.append((price, float(lat), float(lon)))
@@ -93,10 +100,10 @@ def distance(x1,y1,x2,y2):
     return math.sqrt((x1-x2)*(x1-x2) + (y1-y2)*(y1-y2))
 
 def k_nearest(prices, lat, lon):
-    distances = [(distance(lat,lon,plat,plon), price) 
+    distances = [(distance(lat,lon,plat,plon), price)
                  for (price, plat, plon) in prices]
     distances.sort()
-    prices = [price for (dist, price) in distances[:K] 
+    prices = [price for (dist, price) in distances[:K]
               if dist < IGNORE_DIST]
     if len(prices) != K:
         return None
@@ -106,44 +113,42 @@ def greyscale(price):
     grey = int(256*float(price)/3000)
     return grey, grey, grey
 
-def color(val):
+def color(val, price_per_room=False):
     if val is None:
         return (255,255,255,0)
 
-    if val > 1800:
-        return (255, 0, 0) # red
-    elif val > 1700:
-        return (255, 43, 0) # redorange
-    elif val > 1600:
-        return (255, 86, 0) # orangered
-    elif val > 1500:
-        return (255, 127, 0) # orange
-    elif val > 1400:
-        return (255, 171, 0) # orangeyellow
-    elif val > 1300:
-        return (255, 213, 0) # yelloworange
-    elif val > 1200:
-        return (255, 255, 0) # yellow
-    elif val > 1100:
-        return (127, 255, 0) # lime green
-    elif val > 1000:
-        return (0, 255, 0) # green
-    elif val > 900:
-        return (0, 255, 127) # teal
-    elif val > 800:
-        return (0, 255, 255) # light blue
-    elif val > 700:
-        return (0, 213, 255) # medium light blue
-    elif val > 600:
-        return (0, 171, 255) # light medium blue
-    elif val > 500:
-        return (0, 127, 255) # medium blue
-    elif val > 400:
-        return (0, 86, 255) # medium dark blue
-    elif val > 300:
-        return (0, 43, 255) # dark medium blue
+    if price_per_room:
+        prices = [1600, 1500, 1400, 1300, 1200, 1100, 1000, 900,
+                  800, 700, 600, 500, 400, 300, 250, 200]
     else:
-        return (0, 0, 255) # dark blue
+        prices = [1800, 1700, 1600, 1500, 1400, 1300, 1200, 1100,
+                  1000, 900, 800, 700, 600, 500, 400, 300]
+
+    colors = [(255, 0, 0), # red
+              (255, 43, 0), # redorange
+              (255, 86, 0), # orangered
+              (255, 127, 0), # orange
+              (255, 171, 0), # orangeyellow
+              (255, 213, 0), # yelloworange
+              (255, 255, 0), # yellow
+              (127, 255, 0), # lime green
+              (0, 255, 0), # green
+              (0, 255, 127), # teal
+              (0, 255, 255), # light blue,
+              (0, 213, 255), # medium light blue
+              (0, 171, 255), # light medium blue
+              (0, 127, 255), # medium blue
+              (0, 86, 255), # medium dark blue
+              (0, 43, 255), # dark medium blue
+              (0, 0, 255), # dark blue
+              ]
+
+    assert len(prices) == len(colors) - 1
+
+    for price, color in zip(prices, colors):
+        if val > price:
+            return color
+    return colors[-1]
 
 def inverted_distance_weighted_average(prices, lat, lon):
     num = 0
@@ -152,7 +157,7 @@ def inverted_distance_weighted_average(prices, lat, lon):
 
     for price, plat, plon in prices:
         dist = distance(lat,lon,plat,plon) + 0.0001
-        
+
         if dist > IGNORE_DIST:
             continue
 
@@ -167,10 +172,13 @@ def inverted_distance_weighted_average(prices, lat, lon):
         return None
 
     return num/dnm
-    
 
-def start():
-    priced_points = load_prices("apts.txt")
+
+def start(fname, price_per_X):
+    assert price_per_X in ["room", "bedroom"]
+    price_per_room = price_per_X == "room"
+
+    priced_points = load_prices([fname], price_per_room)
 
     I = Image.new('RGBA', (MAX_X, MAX_Y))
     IM = I.load()
@@ -180,7 +188,7 @@ def start():
             lat, lon = pixel_to_ll(x,y)
 
             if MODE == "K_NEAREST_NEIGHBORS":
-                nearest = k_nearest(priced_points, lat, lon)           
+                nearest = k_nearest(priced_points, lat, lon)
                 if not nearest:
                     price = None
                 else:
@@ -190,8 +198,8 @@ def start():
             else:
                 assert False
 
-            IM[x,y] = color(price)
-                
+            IM[x,y] = color(price, price_per_room)
+
 
         print "%s/%s" % (x, MAX_X)
 
@@ -200,7 +208,7 @@ def start():
         if 0 <= x < MAX_X and 0 <= y < MAX_Y:
             IM[x,y] = (0,0,0)
 
-    I.save("apts.png", "PNG")
+    I.save(fname + "." + price_per_X +".png", "PNG")
 
 if __name__ == "__main__":
-    start()
+    start(*sys.argv[1:])
