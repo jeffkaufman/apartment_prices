@@ -211,4 +211,16 @@ def start(fname, price_per_X):
     I.save(fname + "." + price_per_X +".png", "PNG")
 
 if __name__ == "__main__":
-    start(*sys.argv[1:])
+    if len(sys.argv) > 3 or len(sys.argv) < 2:
+        print "usage: python draw_heatmap.py apts.txt [room|bedroom]"
+        print "   room: price is $ per estimated rooms, which is bedrooms + 1"
+        print "   bedroom: price is $ per bedroom, with singles counting as one bedroom"
+        print " default is 'room' as this better reflects the underlying variable of"
+        print " price per square foot"
+    else:
+        fname = sys.argv[1]
+        if len(sys.argv) > 2:
+            price_per_X = sys.argv[2]
+        else:
+            price_per_X = "room"
+        start(fname, price_per_X)
