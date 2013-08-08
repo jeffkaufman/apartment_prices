@@ -208,7 +208,7 @@ def start(fname, price_per_X):
         if 0 <= x < MAX_X and 0 <= y < MAX_Y:
             IM[x,y] = (0,0,0)
 
-    I.save(fname + "." + price_per_X +".png", "PNG")
+    I.save(fname + "." + price_per_X + "." + str(MAX_X) + ".png", "PNG")
 
 if __name__ == "__main__":
     if len(sys.argv) > 3 or len(sys.argv) < 2:
