@@ -13,6 +13,6 @@ Usage:
 You might do well to first set MAX_X and MAX_Y in draw_heatmap to something small (50) to
 test that everything's working before you wait a long time for 1000x1000 or something.
 
-Example output: http://sccs.swarthmore.edu/~cbr/apartment_prices/
+Example output: http://www.jefftk.com/apartment_prices/
 
-Released under the GPL by Jeff Kaufman (June 2011)
+Released under the GPL by Jeff Kaufman (2011-2013)
