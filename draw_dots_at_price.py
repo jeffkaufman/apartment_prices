@@ -7,8 +7,8 @@ from query_padmapper import MAX_LAT, MAX_LON, MIN_LAT, MIN_LON
 
 # change these to change how detailed the generated image is
 # (1000x1000 is good, but very slow)
-MAX_X=10
-MAX_Y=10
+MAX_X=1000
+MAX_Y=1000
 
 def pixel_to_ll(x,y):
     delta_lat = MAX_LAT-MIN_LAT
@@ -88,8 +88,17 @@ def start(fname, n_bedrooms):
 
     for lat, lon in points:
         x, y = ll_to_pixel(lat, lon)
-        if 0 <= x < MAX_X and 0 <= y < MAX_Y:
-            IM[x,y] = (0,0,0)
+        for x1, y1 in [(x,y),
+                       (x+1,y+1),
+                       (x-1,y-1),
+                       (x-1,y+1),
+                       (x+1, y-1),
+                       (x+2,y+2),
+                       (x-2,y-2),
+                       (x-2,y+2),
+                       (x+2, y-2)]:
+            if 0 <= x1 < MAX_X and 0 <= y1 < MAX_Y:
+                IM[x1,y1] = (0,0,0)
 
     I.save(fname + "." + n_bedrooms + "br." + str(MAX_X) + ".png", "PNG")
 
