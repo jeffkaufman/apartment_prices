@@ -1,4 +1,4 @@
-import Image
+from PIL import Image
 import sys
 import math
 
@@ -201,7 +201,7 @@ def start(fname, price_per_X):
             IM[x,y] = color(price, price_per_room)
 
 
-        print "%s/%s" % (x, MAX_X)
+        # print "%s/%s" % (x, MAX_X)
 
     for _, lat, lon in priced_points:
         x, y = ll_to_pixel(lat, lon)
