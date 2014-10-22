@@ -1,14 +1,16 @@
 from PIL import Image
 import sys
 import math
+import numpy
+import json
 
 # set boundaries in query_padmapper
 from query_padmapper import MAX_LAT, MAX_LON, MIN_LAT, MIN_LON
 
 # change these to change how detailed the generated image is
 # (1000x1000 is good, but very slow)
-MAX_X=100
-MAX_Y=100
+MAX_X=1000
+MAX_Y=1000
 
 # at what distance should we stop making predictions?
 IGNORE_DIST=0.01
@@ -60,8 +62,8 @@ def ll_to_pixel(lat,lon):
 
     return x,y
 
-def load_prices(fs, price_per_room=False):
-    prices = []
+def load_prices(fs):
+    raw_prices = []
     seen = set()
     for f in fs:
         with open(f) as inf:
@@ -81,20 +83,30 @@ def load_prices(fs, price_per_room=False):
                 assert bedrooms >= 0
                 rooms = bedrooms + 1
 
-                if bedrooms < 1:
-                    bedrooms = 1 # singles
+                assert bedrooms >= 0
 
-                if price_per_room:
-                    price = rent / rooms
-                else:
-                    price = rent / bedrooms
-
-                if price < 150:
+                if rent / (bedrooms + 1) < 150:
                     continue
 
-                prices.append((price, float(lat), float(lon)))
+                raw_prices.append((bedrooms, rent, float(lat), float(lon)))
 
-    return prices
+    slope, y_intercept = linear_regression([(bedrooms, rent) for (bedrooms, rent, lat, lon) in raw_prices])
+    print "slope =", slope
+    print "y intercept =", y_intercept
+    x_intercept = -(y_intercept)/slope
+    print "x intercept =", x_intercept
+    num_phantom_bedrooms = -x_intercept # positive now
+
+    prices = [(rent / (bedrooms + num_phantom_bedrooms), lat, lon) for (bedrooms, rent, lat, lon) in raw_prices]
+    return prices, num_phantom_bedrooms
+
+def linear_regression(pairs):
+  xs = [x for (x,y) in pairs]
+  ys = [y for (x,y) in pairs]
+
+  A = numpy.array([xs, numpy.ones(len(xs))])
+  w = numpy.linalg.lstsq(A.T,ys)[0]
+  return w[0], w[1]
 
 def distance(x1,y1,x2,y2):
     return math.sqrt((x1-x2)*(x1-x2) + (y1-y2)*(y1-y2))
@@ -113,39 +125,31 @@ def greyscale(price):
     grey = int(256*float(price)/3000)
     return grey, grey, grey
 
-def color(val, price_per_room=False):
+def color(val, buckets):
     if val is None:
         return (255,255,255,0)
 
-    if price_per_room:
-        prices = [1600, 1500, 1400, 1300, 1200, 1100, 1000, 900,
-                  800, 700, 600, 500, 400, 300, 250, 200]
-    else:
-        prices = [1800, 1700, 1600, 1500, 1400, 1300, 1200, 1100,
-                  1000, 900, 800, 700, 600, 500, 400, 300]
-
-    colors = [(255, 0, 0), # red
-              (255, 43, 0), # redorange
-              (255, 86, 0), # orangered
-              (255, 127, 0), # orange
-              (255, 171, 0), # orangeyellow
-              (255, 213, 0), # yelloworange
-              (255, 255, 0), # yellow
-              (127, 255, 0), # lime green
-              (0, 255, 0), # green
-              (0, 255, 127), # teal
-              (0, 255, 255), # light blue,
-              (0, 213, 255), # medium light blue
-              (0, 171, 255), # light medium blue
-              (0, 127, 255), # medium blue
-              (0, 86, 255), # medium dark blue
-              (0, 43, 255), # dark medium blue
-              (0, 0, 255), # dark blue
+    colors = [(255, 0, 0),
+              (255, 91, 0),
+              (255, 127, 0),
+              (255, 171, 0),
+              (255, 208, 0),
+              (255, 240, 0),
+              (255, 255, 0),
+              (218, 255, 0),
+              (176, 255, 0),
+              (128, 255, 0),
+              (0, 255, 0),
+              (0, 255, 255),
+              (0, 240, 255),
+              (0, 213, 255),
+              (0, 171, 255),
+              (0, 127, 255),
+              (0, 86, 255),
+              (0, 0, 255),
               ]
 
-    assert len(prices) == len(colors) - 1
-
-    for price, color in zip(prices, colors):
+    for price, color in zip(buckets, colors):
         if val > price:
             return color
     return colors[-1]
@@ -174,15 +178,11 @@ def inverted_distance_weighted_average(prices, lat, lon):
     return num/dnm
 
 
-def start(fname, price_per_X):
-    assert price_per_X in ["room", "bedroom"]
-    price_per_room = price_per_X == "room"
+def start(fname):
+    priced_points, num_phantom_bedrooms = load_prices([fname])
 
-    priced_points = load_prices([fname], price_per_room)
-
-    I = Image.new('RGBA', (MAX_X, MAX_Y))
-    IM = I.load()
-
+    # price all the points
+    prices = {}
     for x in range(MAX_X):
         for y in range(MAX_Y):
             lat, lon = pixel_to_ll(x,y)
@@ -198,29 +198,52 @@ def start(fname, price_per_X):
             else:
                 assert False
 
-            IM[x,y] = color(price, price_per_room)
+            prices[x,y] = price
 
+    # determine buckets
+    # we want 18 buckets (17 divisions) of equal area
+    all_priced_areas = [x for x in sorted(prices.values()) if x is not None]
+    total_priced_area = len(all_priced_areas)
 
-        # print "%s/%s" % (x, MAX_X)
+    buckets = []
+    divisions = 17.0
+    stride = total_priced_area / (divisions + 1)
+    next_i = int(stride)
+    error_i = stride - next_i
+    for i, val in enumerate(all_priced_areas):
+      if i == next_i:
+        buckets.append(val)
+        delta_i = stride + error_i
+        next_i += int(delta_i)
+        error_i = delta_i - int(delta_i)
+    
+    buckets.reverse()
 
+    print "buckets: ", buckets
+
+    # color regions by price
+    I = Image.new('RGBA', (MAX_X, MAX_Y))
+    IM = I.load()
+    for x in range(MAX_X):
+        for y in range(MAX_Y):
+            IM[x,y] = color(prices[x,y], buckets)
+
+    # add the dots
     for _, lat, lon in priced_points:
         x, y = ll_to_pixel(lat, lon)
         if 0 <= x < MAX_X and 0 <= y < MAX_Y:
             IM[x,y] = (0,0,0)
 
-    I.save(fname + "." + price_per_X + "." + str(MAX_X) + ".png", "PNG")
+    out_fname = fname + ".phantom." + str(MAX_X)
+    I.save(out_fname + ".png", "PNG")
+    with open(out_fname + ".metadata.json", "w") as outf:
+      outf.write(json.dumps({
+          "num_phantom_bedrooms": num_phantom_bedrooms,
+          "buckets": buckets}))
 
 if __name__ == "__main__":
-    if len(sys.argv) > 3 or len(sys.argv) < 2:
-        print "usage: python draw_heatmap.py apts.txt [room|bedroom]"
-        print "   room: price is $ per estimated rooms, which is bedrooms + 1"
-        print "   bedroom: price is $ per bedroom, with singles counting as one bedroom"
-        print " default is 'room' as this better reflects the underlying variable of"
-        print " price per square foot"
+    if len(sys.argv) != 2:
+        print "usage: python draw_heatmap.py apts.txt"
     else:
         fname = sys.argv[1]
-        if len(sys.argv) > 2:
-            price_per_X = sys.argv[2]
-        else:
-            price_per_X = "room"
-        start(fname, price_per_X)
+        start(fname)
