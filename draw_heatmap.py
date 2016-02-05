@@ -15,8 +15,6 @@ MAX_Y=1000
 # at what distance should we stop making predictions?
 IGNORE_DIST=0.01
 
-MODE = "INVERTED_DISTANCE_WEIGHTED_AVERAGE"
-
 def pixel_to_ll(x,y):
     delta_lat = MAX_LAT-MIN_LAT
     delta_lon = MAX_LON-MIN_LON
@@ -92,7 +90,7 @@ def load_prices(fs):
     print "x intercept =", x_intercept
     num_phantom_bedrooms = -x_intercept # positive now
 
-    prices = [(rent / (bedrooms + num_phantom_bedrooms), lat, lon) for (bedrooms, rent, lat, lon) in raw_prices]
+    prices = [(rent / (bedrooms + num_phantom_bedrooms), lat, lon, bedrooms) for (bedrooms, rent, lat, lon) in raw_prices]
     return prices, num_phantom_bedrooms
 
 def linear_regression(pairs):
@@ -103,8 +101,11 @@ def linear_regression(pairs):
   w = numpy.linalg.lstsq(A.T,ys)[0]
   return w[0], w[1]
 
+def distance_squared(x1,y1,x2,y2):
+    return (x1-x2)*(x1-x2) + (y1-y2)*(y1-y2)
+
 def distance(x1,y1,x2,y2):
-    return math.sqrt((x1-x2)*(x1-x2) + (y1-y2)*(y1-y2))
+    return math.sqrt(distance_squared(x1,y1,x2,y2))
 
 def greyscale(price):
     grey = int(256*float(price)/3000)
@@ -139,24 +140,29 @@ def color(val, buckets):
             return color
     return colors[-1]
 
-def inverted_distance_weighted_average(prices, lat, lon):
+gaussian_variance = IGNORE_DIST/5
+gaussian_a = 1 / (gaussian_variance * math.sqrt(2 * math.pi))
+gaussian_negative_inverse_twice_variance_squared = -1 / (2 * gaussian_variance * gaussian_variance)
+
+def gaussian(prices, lat, lon, ignore=None):
     num = 0
     dnm = 0
     c = 0
 
-    for price, plat, plon in prices:
-        dist = distance(lat,lon,plat,plon) + 0.0001
-
-        if dist > IGNORE_DIST:
+    for i, (price, plat, plon, _) in enumerate(prices):
+        if i == ignore:
             continue
 
-        inv_dist = 1/dist
+        weight = gaussian_a * math.exp(distance_squared(lat,lon,plat,plon) *
+                                       gaussian_negative_inverse_twice_variance_squared)
 
-        num += price * inv_dist
-        dnm += inv_dist
-        c += 1
+        num += price * weight
+        dnm += weight
 
-    # don't display any averages that don't take into account at least five data points
+        if weight > 0.06:
+            c += 1
+
+    # don't display any averages that don't take into account at least five data points with significant weight
     if c < 5:
         return None
 
@@ -171,13 +177,7 @@ def start(fname):
     for x in range(MAX_X):
         for y in range(MAX_Y):
             lat, lon = pixel_to_ll(x,y)
-
-            if MODE == "INVERTED_DISTANCE_WEIGHTED_AVERAGE":
-                price = inverted_distance_weighted_average(priced_points, lat, lon)
-            else:
-                assert False
-
-            prices[x,y] = price
+            prices[x,y] = gaussian(priced_points, lat, lon)
 
     # determine buckets
     # we want 18 buckets (17 divisions) of equal area
@@ -208,7 +208,7 @@ def start(fname):
             IM[x,y] = color(prices[x,y], buckets)
 
     # add the dots
-    for _, lat, lon in priced_points:
+    for _, lat, lon, _ in priced_points:
         x, y = ll_to_pixel(lat, lon)
         if 0 <= x < MAX_X and 0 <= y < MAX_Y:
             IM[x,y] = (0,0,0)
