@@ -172,6 +172,33 @@ def gaussian(prices, lat, lon, ignore=None):
 def start(fname):
     priced_points, num_phantom_bedrooms = load_prices([fname])
 
+    # compute what the error would be at each data point if we priced it without being able to take it into account
+    # do this on a per-bedroom basis, so that we can compute correction factors
+    bedroom_categories = list(sorted(set(bedrooms for _, _, _, bedrooms in priced_points)))
+    adjustments = {}
+    for bedroom_category in bedroom_categories:
+        total_actual = 0
+        total_predicted = 0
+
+        for i, (price, plat, plon, bedroom) in enumerate(priced_points):
+            if bedroom != bedroom_category:
+                continue
+
+            x, y = ll_to_pixel(plat, plon)
+            predicted_price = gaussian(priced_points, plat, plon, ignore=i)
+
+            if predicted_price:
+                total_actual += price
+                total_predicted += predicted_price
+
+        if total_predicted == 0:
+            # we might not make any predictions, if we don't have enough data
+            adjustment = 1.0
+        else:
+            adjustment = total_actual / total_predicted
+
+        adjustments[bedroom_category] = adjustment
+
     # price all the points
     prices = {}
     for x in range(MAX_X):
@@ -195,7 +222,7 @@ def start(fname):
         delta_i = stride + error_i
         next_i += int(delta_i)
         error_i = delta_i - int(delta_i)
-    
+
     buckets.reverse()
 
     print "buckets: ", buckets
@@ -218,7 +245,8 @@ def start(fname):
     with open(out_fname + ".metadata.json", "w") as outf:
       outf.write(json.dumps({
           "num_phantom_bedrooms": num_phantom_bedrooms,
-          "buckets": buckets}))
+          "buckets": buckets,
+          "adjustments": adjustments}))
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
