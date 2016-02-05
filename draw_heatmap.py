@@ -15,12 +15,7 @@ MAX_Y=1000
 # at what distance should we stop making predictions?
 IGNORE_DIST=0.01
 
-# this is a good waty
 MODE = "INVERTED_DISTANCE_WEIGHTED_AVERAGE"
-#MODE = "K_NEAREST_NEIGHBORS"
-
-# this only affects k_nearest mode
-K=5
 
 def pixel_to_ll(x,y):
     delta_lat = MAX_LAT-MIN_LAT
@@ -111,16 +106,6 @@ def linear_regression(pairs):
 def distance(x1,y1,x2,y2):
     return math.sqrt((x1-x2)*(x1-x2) + (y1-y2)*(y1-y2))
 
-def k_nearest(prices, lat, lon):
-    distances = [(distance(lat,lon,plat,plon), price)
-                 for (price, plat, plon) in prices]
-    distances.sort()
-    prices = [price for (dist, price) in distances[:K]
-              if dist < IGNORE_DIST]
-    if len(prices) != K:
-        return None
-    return prices
-
 def greyscale(price):
     grey = int(256*float(price)/3000)
     return grey, grey, grey
@@ -187,13 +172,7 @@ def start(fname):
         for y in range(MAX_Y):
             lat, lon = pixel_to_ll(x,y)
 
-            if MODE == "K_NEAREST_NEIGHBORS":
-                nearest = k_nearest(priced_points, lat, lon)
-                if not nearest:
-                    price = None
-                else:
-                    price = float(sum(nearest))/K
-            elif MODE == "INVERTED_DISTANCE_WEIGHTED_AVERAGE":
+            if MODE == "INVERTED_DISTANCE_WEIGHTED_AVERAGE":
                 price = inverted_distance_weighted_average(priced_points, lat, lon)
             else:
                 assert False
