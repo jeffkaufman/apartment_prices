@@ -149,9 +149,11 @@ def gaussian(prices, lat, lon, ignore=None):
     dnm = 0
     c = 0
 
-    for i, (price, plat, plon, _) in enumerate(prices):
-        if i == ignore:
-            continue
+    for price, plat, plon, _ in prices:
+        if ignore:
+            ilat, ilon = ignore
+            if distance_squared(plat, plon, ilat, ilon) < 0.0001:
+                continue
 
         weight = gaussian_a * math.exp(distance_squared(lat,lon,plat,plon) *
                                        gaussian_negative_inverse_twice_variance_squared)
@@ -185,7 +187,7 @@ def start(fname):
                 continue
 
             x, y = ll_to_pixel(plat, plon)
-            predicted_price = gaussian(priced_points, plat, plon, ignore=i)
+            predicted_price = gaussian(priced_points, plat, plon, ignore=(plat, plon))
 
             if predicted_price:
                 total_actual += price
