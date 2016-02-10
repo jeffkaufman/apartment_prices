@@ -140,7 +140,7 @@ def color(val, buckets):
             return color
     return colors[-1]
 
-gaussian_variance = IGNORE_DIST/5
+gaussian_variance = IGNORE_DIST/2
 gaussian_a = 1 / (gaussian_variance * math.sqrt(2 * math.pi))
 gaussian_negative_inverse_twice_variance_squared = -1 / (2 * gaussian_variance * gaussian_variance)
 
