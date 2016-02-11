@@ -12,6 +12,8 @@ from query_padmapper import MAX_LAT, MAX_LON, MIN_LAT, MIN_LON
 MAX_X=1000
 MAX_Y=1000
 
+DRAW_DOTS=True
+
 # at what distance should we stop making predictions?
 IGNORE_DIST=0.01
 
@@ -160,8 +162,8 @@ def gaussian(prices, lat, lon, ignore=None):
 
         num += price * weight
         dnm += weight
-
-        if weight > 0.06:
+        
+        if weight > 2:
             c += 1
 
     # don't display any averages that don't take into account at least five data points with significant weight
@@ -172,13 +174,17 @@ def gaussian(prices, lat, lon, ignore=None):
 
 
 def start(fname):
+    print "loading data..."
     priced_points, num_phantom_bedrooms = load_prices([fname])
+
+    print "computing #bedroom adjustments..."
 
     # compute what the error would be at each data point if we priced it without being able to take it into account
     # do this on a per-bedroom basis, so that we can compute correction factors
     bedroom_categories = list(sorted(set(bedrooms for _, _, _, bedrooms in priced_points)))
     adjustments = {}
     for bedroom_category in bedroom_categories:
+        print "  %sbr..." % (bedroom_category)
         total_actual = 0
         total_predicted = 0
 
@@ -201,9 +207,10 @@ def start(fname):
 
         adjustments[bedroom_category] = adjustment
 
-    # price all the points
+    print "pricing all the points..."
     prices = {}
     for x in range(MAX_X):
+        print "  %s/%s" % (x, MAX_X)
         for y in range(MAX_Y):
             lat, lon = pixel_to_ll(x,y)
             prices[x,y] = gaussian(priced_points, lat, lon)
@@ -236,11 +243,11 @@ def start(fname):
         for y in range(MAX_Y):
             IM[x,y] = color(prices[x,y], buckets)
 
-    # add the dots
-    for _, lat, lon, _ in priced_points:
-        x, y = ll_to_pixel(lat, lon)
-        if 0 <= x < MAX_X and 0 <= y < MAX_Y:
-            IM[x,y] = (0,0,0)
+    if DRAW_DOTS:
+        for _, lat, lon, _ in priced_points:
+            x, y = ll_to_pixel(lat, lon)
+            if 0 <= x < MAX_X and 0 <= y < MAX_Y:
+                IM[x,y] = (0,0,0)
 
     out_fname = fname + ".phantom." + str(MAX_X)
     I.save(out_fname + ".png", "PNG")
@@ -248,6 +255,7 @@ def start(fname):
       outf.write(json.dumps({
           "num_phantom_bedrooms": num_phantom_bedrooms,
           "buckets": buckets,
+          "n": len(priced_points),
           "adjustments": adjustments}))
 
 if __name__ == "__main__":
