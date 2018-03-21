@@ -146,7 +146,7 @@ def gaussian(prices, lat, lon, ignore=None):
 
         num += price * weight
         dnm += weight
-        
+
         if weight > 2:
             c += 1
 
@@ -173,9 +173,9 @@ def start(title, *fnames):
         4000,
         3800,
         3600,
+        3400,
         3200,
         3000,
-        2900,
         2800,
         2700,
         2600,
