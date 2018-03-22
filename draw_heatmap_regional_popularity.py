@@ -72,8 +72,9 @@ def ll_to_pixel(lat,lon):
     return x,y
 
 def load_prices(fs):
-    prices = []
+    raw_prices = []
     seen = set()
+    total_price = 0.0
     for f in fs:
         with open(f) as inf:
             for line in inf:
@@ -91,7 +92,16 @@ def load_prices(fs):
                 if bedrooms != 2:
                     continue
 
-                prices.append((rent, float(lat), float(lon)))
+                raw_prices.append((rent, float(lat), float(lon)))
+                total_price += rent
+
+    avg_price = total_price / len(raw_prices)
+
+    prices = []
+    for rent, lat, lon in raw_prices:
+      norm_rent = rent / avg_price
+      prices.append((norm_rent, lat, lon))
+
     return prices
 
 def distance_squared(x1,y1,x2,y2):
@@ -356,24 +366,24 @@ magma_data = [[0.001462, 0.000466, 0.013866],
 
 
 buckets = [
-    4000,
-    3800,
-    3600,
-    3400,
-    3200,
-    3000,
-    2800,
-    2700,
-    2600,
-    2500,
-    2400,
-    2300,
-    2200,
-    2100,
-    2000,
-    1900,
-    1800,
-    1700]
+    2.0,
+    1.8,
+    1.6,
+    1.4,
+    1.3,
+    1.35,
+    1.2,
+    1.25,
+    1.1,
+    1.05,
+    1.0,
+    0.95,
+    0.9,
+    0.85,
+    0.8,
+    0.7,
+    0.6,
+    0.5]
 
 colors = []
 n_colors = len(buckets) + 1
@@ -448,7 +458,7 @@ def start(title, *fnames):
             if 0 <= x < MAX_X and 0 <= y < MAX_Y:
                 IM[x,y] = (0,0,0)
 
-    out_fname = title + ".2br-static." + str(MAX_X)
+    out_fname = title + ".2br-relative." + str(MAX_X)
     I.save(out_fname + ".png", "PNG")
 
     for max_price, min_price, clr in zip(
