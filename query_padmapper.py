@@ -3,8 +3,8 @@ import sys
 import urllib
 import urllib2
 import os.path
-
-YOUR_NAME = "YOUR NAME (your-email@example.com)"
+import subprocess
+import shlex
 
 # boston
 MIN_LAT=42.255594
@@ -30,8 +30,45 @@ MAX_LON=-70.975800
 #MAX_LAT=37.83
 #MIN_LON=-122.70
 
+class AreaTooLarge(Exception):
+  pass
+
+def direct_fetch(cmd_prefix, minLat, minLng, maxLat, maxLng):
+  args = shlex.split(cmd_prefix)
+  args.append("--data-binary")
+  # You would think we could just use offset, but that's not actually respected
+  # by the backend.
+  args.append('{"bedrooms":[0,1,2,3,4,5],"limit":100,'
+              '"maxLat":%s,"minLat":%s,"maxLng":%s,"minLng":%s,'
+              '"offset":0,"propertyCategories":["apartment"]}' % (
+                  maxLat, minLat, maxLng, minLng))
+  args.append('--compressed')
+  args.append('-sS')
+  result = json.loads(subprocess.check_output(args))
+  if len(result) > 99:
+    raise AreaTooLarge()
+  return result
+
+def intermediate(minVal, maxVal):
+  return (maxVal-minVal)/2 + minVal
+
+def fetch(cmd_prefix, minLat, minLng, maxLat, maxLng, it=0):
+  print('%s %.6f %.6f %.6f %.6f' % ('  '* it, minLat, minLng, maxLat, maxLng))
+
+  def fetchHelper(minLat, minLng, maxLat, maxLng):
+    return fetch(cmd_prefix, minLat, minLng, maxLat, maxLng, it+1)
+
+  try:
+    return direct_fetch(cmd_prefix, minLat, minLng, maxLat, maxLng)
+  except AreaTooLarge:
+    if it % 2:
+      return (fetchHelper(minLat, minLng, intermediate(minLat, maxLat), maxLng) +
+              fetchHelper(intermediate(minLat, maxLat), minLng, maxLat, maxLng))
+    else:
+      return (fetchHelper(minLat, minLng, maxLat, intermediate(minLng, maxLng)) +
+              fetchHelper(minLat, intermediate(minLng, maxLng), maxLat, maxLng))
+
 def download(fname):
-  base = os.path.basename(fname)
   print "Visit:"
   print 'https://www.padmapper.com/apartments/belmont-ma/belmont-hill?box=-71.1993028524,42.396054506,-71.1761285665,42.4262507215&property-categories=apartment'
   print "Inspect the networking, find a pins request, copy request as curl and paste here."
@@ -39,10 +76,12 @@ def download(fname):
   if "--data-binary" not in inp:
     raise Exception("Something looks wrong.  Was that the curl version of a pins request?")
 
-  print "Run:"
-  print inp.split("--data-binary")[0] + '--data-binary \'{"bedrooms":[0,1,2,3,4,5],"limit":10000,"maxLat":%s,"minLat":%s,"maxLng":%s,"minLng":%s,"offset":0,"propertyCategories":["apartment"]}\' --compressed -o %s' % (
-    MAX_LAT, MIN_LAT, MAX_LON, MIN_LON, base)
-  raw_input("waiting...")
+  cmd_prefix = inp.split("--data-binary")[0]
+  result = fetch(cmd_prefix, MIN_LAT, MIN_LON, MAX_LAT, MAX_LON)
+  if not result:
+    raise Exception("no response")
+  with open(fname, 'w') as outf:
+    outf.write(json.dumps(result))
 
 def process(fname_in, fname_out):
   with open(fname_in) as inf:
@@ -57,9 +96,6 @@ def process(fname_in, fname_out):
 
     processed.append((rent, bedrooms, apt_id, lon, lat))
 
-  if len(processed) >= 9999:
-    print "should probably raise the limit in the pull"
-
   with open(fname_out, "w") as outf:
     print "writing to %s" % fname_out
     for rent, bedrooms, apt_id, lon, lat in processed:
@@ -69,7 +105,7 @@ def start(fname_download, fname_processed):
   if not os.path.exists(fname_download):
     download(fname_download)
   if not os.path.exists(fname_download):
-    raise Exeption("%s still missing" % fname_download)
+    raise Exception("%s still missing" % fname_download)
 
   if not os.path.exists(fname_processed):
     process(fname_download, fname_processed)
