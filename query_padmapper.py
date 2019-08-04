@@ -1,7 +1,7 @@
 import json
 import sys
-import urllib
-import urllib2
+import urllib.request, urllib.parse, urllib.error
+import urllib.request, urllib.error, urllib.parse
 import os.path
 import subprocess
 import shlex
@@ -58,7 +58,7 @@ def intermediate(minVal, maxVal):
   return (maxVal-minVal)/2 + minVal
 
 def fetch(cmd_prefix, minLat, minLng, maxLat, maxLng, it=0):
-  print('%s %.10f %.10f %.10f %.10f' % ('  '* it, minLat, minLng, maxLat, maxLng))
+  print(('%s %.10f %.10f %.10f %.10f' % ('  '* it, minLat, minLng, maxLat, maxLng)))
 
   def fetchHelper(minLat, minLng, maxLat, maxLng):
     return fetch(cmd_prefix, minLat, minLng, maxLat, maxLng, it+1)
@@ -74,10 +74,10 @@ def fetch(cmd_prefix, minLat, minLng, maxLat, maxLng, it=0):
               fetchHelper(minLat, intermediate(minLng, maxLng), maxLat, maxLng))
 
 def download(fname):
-  print "Visit:"
-  print 'https://www.padmapper.com/apartments/belmont-ma/belmont-hill?box=-71.1993028524,42.396054506,-71.1761285665,42.4262507215&property-categories=apartment'
-  print "Inspect the networking, find a pins request, copy request as curl and paste here."
-  inp = raw_input("> ")
+  print("Visit:")
+  print('https://www.padmapper.com/apartments/belmont-ma/belmont-hill?box=-71.1993028524,42.396054506,-71.1761285665,42.4262507215&property-categories=apartment')
+  print("Inspect the networking, find a pins request, copy request as curl and paste here.")
+  inp = input("> ")
   if "--data-binary" not in inp:
     raise Exception("Something looks wrong.  Was that the curl version of a pins request?")
 
@@ -102,7 +102,7 @@ def process(fname_in, fname_out):
     processed.append((rent, bedrooms, apt_id, lon, lat))
 
   with open(fname_out, "w") as outf:
-    print "writing to %s" % fname_out
+    print("writing to %s" % fname_out)
     for rent, bedrooms, apt_id, lon, lat in processed:
       outf.write("%s %s %s %s %s\n" % (rent, bedrooms, apt_id, lon, lat))
 
@@ -115,9 +115,9 @@ def start(fname_download, fname_processed):
   if not os.path.exists(fname_processed):
     process(fname_download, fname_processed)
   else:
-    print "%s already exists" % fname_processed
+    print("%s already exists" % fname_processed)
 
-  print "Now you want to use draw_heatmap.py on %s" % fname_processed
+  print("Now you want to use draw_heatmap.py on %s" % fname_processed)
 
 if __name__ == "__main__":
   start(*sys.argv[1:])

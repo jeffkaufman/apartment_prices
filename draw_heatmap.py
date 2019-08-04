@@ -34,8 +34,8 @@ def pixel_to_ll(x,y):
     calc_x, calc_y = ll_to_pixel(lat, lon)
 
     if abs(calc_x-x) > 1 or abs(calc_y-y) > 1:
-        print "Mismatch: %s, %s => %s %s" % (
-            x,y, calc_x, calc_y)
+        print("Mismatch: %s, %s => %s %s" % (
+            x,y, calc_x, calc_y))
 
     return lat, lon
 
@@ -86,10 +86,10 @@ def load_prices(fs):
                 raw_prices.append((bedrooms, rent, float(lat), float(lon)))
 
     slope, y_intercept = linear_regression([(bedrooms, rent) for (bedrooms, rent, lat, lon) in raw_prices])
-    print "slope =", slope
-    print "y intercept =", y_intercept
+    print("slope =", slope)
+    print("y intercept =", y_intercept)
     x_intercept = -(y_intercept)/slope
-    print "x intercept =", x_intercept
+    print("x intercept =", x_intercept)
     num_phantom_bedrooms = -x_intercept # positive now
 
     prices = [(rent / (bedrooms + num_phantom_bedrooms), lat, lon, bedrooms) for (bedrooms, rent, lat, lon) in raw_prices]
@@ -174,17 +174,17 @@ def gaussian(prices, lat, lon, ignore=None):
 
 
 def start(fname):
-    print "loading data..."
+    print("loading data...")
     priced_points, num_phantom_bedrooms = load_prices([fname])
 
-    print "computing #bedroom adjustments..."
+    print("computing #bedroom adjustments...")
 
     # compute what the error would be at each data point if we priced it without being able to take it into account
     # do this on a per-bedroom basis, so that we can compute correction factors
     bedroom_categories = list(sorted(set(bedrooms for _, _, _, bedrooms in priced_points)))
     adjustments = {}
     for bedroom_category in bedroom_categories:
-        print "  %sbr..." % (bedroom_category)
+        print("  %sbr..." % (bedroom_category))
         total_actual = 0
         total_predicted = 0
 
@@ -207,10 +207,10 @@ def start(fname):
 
         adjustments[bedroom_category] = adjustment
 
-    print "pricing all the points..."
+    print("pricing all the points...")
     prices = {}
     for x in range(MAX_X):
-        print "  %s/%s" % (x, MAX_X)
+        print("  %s/%s" % (x, MAX_X))
         for y in range(MAX_Y):
             lat, lon = pixel_to_ll(x,y)
             prices[x,y] = gaussian(priced_points, lat, lon)
@@ -234,7 +234,7 @@ def start(fname):
 
     buckets.reverse()
 
-    print "buckets: ", buckets
+    print("buckets: ", buckets)
 
     # color regions by price
     I = Image.new('RGBA', (MAX_X, MAX_Y))
@@ -260,7 +260,7 @@ def start(fname):
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print "usage: python draw_heatmap.py apts.txt"
+        print("usage: python draw_heatmap.py apts.txt")
     else:
         fname = sys.argv[1]
         start(fname)
