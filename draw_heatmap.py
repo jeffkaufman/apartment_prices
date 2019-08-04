@@ -217,7 +217,7 @@ def start(fname):
 
     # determine buckets
     # we want 18 buckets (17 divisions) of equal area
-    all_priced_areas = [x for x in sorted(prices.values()) if x is not None]
+    all_priced_areas = sorted(x for x in prices.values() if x is not None)
     total_priced_area = len(all_priced_areas)
 
     buckets = []
