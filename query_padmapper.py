@@ -33,7 +33,7 @@ MAX_LON=-70.975800
 class AreaTooLarge(Exception):
   pass
 
-def direct_fetch(cmd_prefix, minLat, minLng, maxLat, maxLng):
+def direct_fetch(cmd_prefix, minLat, minLng, maxLat, maxLng, it):
   args = shlex.split(cmd_prefix)
   args.append("--data-binary")
   # You would think we could just use offset, but that's not actually respected
@@ -46,20 +46,25 @@ def direct_fetch(cmd_prefix, minLat, minLng, maxLat, maxLng):
   args.append('-sS')
   result = json.loads(subprocess.check_output(args))
   if len(result) > 99:
-    raise AreaTooLarge()
+    if it > 50:
+      # we've already tried to zoom in too far here, and now we're stuck.
+      import pprint
+      pprint.pprint(result)
+    else:
+      raise AreaTooLarge()
   return result
 
 def intermediate(minVal, maxVal):
   return (maxVal-minVal)/2 + minVal
 
 def fetch(cmd_prefix, minLat, minLng, maxLat, maxLng, it=0):
-  print('%s %.6f %.6f %.6f %.6f' % ('  '* it, minLat, minLng, maxLat, maxLng))
+  print('%s %.10f %.10f %.10f %.10f' % ('  '* it, minLat, minLng, maxLat, maxLng))
 
   def fetchHelper(minLat, minLng, maxLat, maxLng):
     return fetch(cmd_prefix, minLat, minLng, maxLat, maxLng, it+1)
 
   try:
-    return direct_fetch(cmd_prefix, minLat, minLng, maxLat, maxLng)
+    return direct_fetch(cmd_prefix, minLat, minLng, maxLat, maxLng, it)
   except AreaTooLarge:
     if it % 2:
       return (fetchHelper(minLat, minLng, intermediate(minLat, maxLat), maxLng) +
