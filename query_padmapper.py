@@ -78,6 +78,12 @@ def download(fname):
   print('https://www.padmapper.com/apartments/belmont-ma/belmont-hill?box=-71.1993028524,42.396054506,-71.1761285665,42.4262507215&property-categories=apartment')
   print("Inspect the networking, find a pins request, copy request as curl and paste here.")
   inp = input("> ")
+  while inp.endswith("\\"):
+    inp = inp[:-2] + " "
+    inp += input("> ")
+
+  print ("%r" % inp)
+
   if "--data-binary" not in inp:
     raise Exception("Something looks wrong.  Was that the curl version of a pins request?")
 
