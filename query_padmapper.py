@@ -54,6 +54,10 @@ def direct_fetch(cmd_prefix, minLat, minLng, maxLat, maxLng, it):
       pprint.pprint(result)
     else:
       raise AreaTooLarge()
+
+  if type(result) != type([]):
+    import pprint
+    pprint.pprint(result)
   return result
 
 def intermediate(minVal, maxVal):
