@@ -90,10 +90,10 @@ def download(fname):
 
   print ("%r" % inp)
 
-  if "--data-binary" not in inp:
+  if "--data-raw" not in inp:
     raise Exception("Something looks wrong.  Was that the curl version of a pins request?")
 
-  cmd_prefix = inp.split("--data-binary")[0]
+  cmd_prefix = inp.split("--data-raw")[0]
   result = fetch(cmd_prefix, MIN_LAT, MIN_LON, MAX_LAT, MAX_LON)
   if not result:
     raise Exception("no response")
