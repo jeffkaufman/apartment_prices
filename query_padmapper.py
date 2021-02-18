@@ -5,6 +5,7 @@ import urllib.request, urllib.error, urllib.parse
 import os.path
 import subprocess
 import shlex
+import time
 
 # boston
 MIN_LAT=42.255594
@@ -44,6 +45,7 @@ def direct_fetch(cmd_prefix, minLat, minLng, maxLat, maxLng, it):
                   maxLat, minLat, maxLng, minLng))
   args.append('--compressed')
   args.append('-sS')
+  time.sleep(1)
   result = json.loads(subprocess.check_output(args))
   if len(result) > 99:
     if it > 50:
