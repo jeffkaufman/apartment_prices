@@ -5,6 +5,7 @@ import urllib.request, urllib.error, urllib.parse
 import os.path
 import subprocess
 import shlex
+import time
 
 # boston
 MIN_LAT=42.255594
@@ -44,6 +45,7 @@ def direct_fetch(cmd_prefix, minLat, minLng, maxLat, maxLng, it):
                   maxLat, minLat, maxLng, minLng))
   args.append('--compressed')
   args.append('-sS')
+  time.sleep(1)
   result = json.loads(subprocess.check_output(args))
   if len(result) > 99:
     if it > 50:
@@ -52,6 +54,10 @@ def direct_fetch(cmd_prefix, minLat, minLng, maxLat, maxLng, it):
       pprint.pprint(result)
     else:
       raise AreaTooLarge()
+
+  if type(result) != type([]):
+    import pprint
+    pprint.pprint(result)
   return result
 
 def intermediate(minVal, maxVal):
@@ -84,10 +90,10 @@ def download(fname):
 
   print ("%r" % inp)
 
-  if "--data-binary" not in inp:
+  if "--data-raw" not in inp:
     raise Exception("Something looks wrong.  Was that the curl version of a pins request?")
 
-  cmd_prefix = inp.split("--data-binary")[0]
+  cmd_prefix = inp.split("--data-raw")[0]
   result = fetch(cmd_prefix, MIN_LAT, MIN_LON, MAX_LAT, MAX_LON)
   if not result:
     raise Exception("no response")
