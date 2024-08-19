@@ -36,17 +36,34 @@ class AreaTooLarge(Exception):
 
 def direct_fetch(cmd_prefix, minLat, minLng, maxLat, maxLng, it):
   args = shlex.split(cmd_prefix)
-  args.append("--data-binary")
+  args.append("--data-raw")
   # You would think we could just use offset, but that's not actually respected
   # by the backend.
-  args.append('{"bedrooms":[0,1,2,3,4,5],"limit":100,'
-              '"maxLat":%s,"minLat":%s,"maxLng":%s,"minLng":%s,'
-              '"offset":0,"propertyCategories":["apartment"]}' % (
-                  maxLat, minLat, maxLng, minLng))
+  args.append(json.dumps(
+    {'limit': 100,
+     'box': {'maxLat': maxLat,
+             'minLat': minLat,
+             'maxLng': maxLng,
+             'minLng': minLng},
+     'propertyTypes': {'include': [4, 15, 5, 14, 9, 1, 3, 6, 13, 21],
+                       'exclude': [16, 17]},
+     'external': True}))
   args.append('--compressed')
   args.append('-sS')
   time.sleep(1)
   result = json.loads(subprocess.check_output(args))
+
+  if (type(result) != type({}) or
+      "pins" not in result or
+      type(result["pins"]) != type([])):
+    import pprint
+    pprint.pprint(result)
+    with open("tmp.json", "w") as outf:
+      json.dump(result, outf)
+    raise Exception("bad response")
+
+  result = result["pins"]
+  
   if len(result) > 99:
     if it > 50:
       # we've already tried to zoom in too far here, and now we're stuck.
@@ -55,9 +72,6 @@ def direct_fetch(cmd_prefix, minLat, minLng, maxLat, maxLng, it):
     else:
       raise AreaTooLarge()
 
-  if type(result) != type([]):
-    import pprint
-    pprint.pprint(result)
   return result
 
 def intermediate(minVal, maxVal):
