@@ -1,0 +1,7 @@
+prices-*.tsv
+apts-*.culled
+apts-download-*.txt
+*.pyc
+*-static*.png
+*errors*
+
