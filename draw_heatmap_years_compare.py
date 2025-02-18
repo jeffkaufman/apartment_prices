@@ -23,8 +23,10 @@ from query_padmapper import MAX_LAT, MAX_LON, MIN_LAT, MIN_LON
 
 # change these to change how detailed the generated image is
 # (1000x1000 is good, but very slow)
-MAX_X=303
-MAX_Y=357
+#MAX_X=303
+#MAX_Y=357
+MAX_X=1000
+MAX_Y=1000
 
 DRAW_DOTS=True
 
@@ -48,8 +50,8 @@ def pixel_to_ll(x,y):
     calc_x, calc_y = ll_to_pixel(lat, lon)
 
     if abs(calc_x-x) > 1 or abs(calc_y-y) > 1:
-        print "Mismatch: %s, %s => %s %s" % (
-            x,y, calc_x, calc_y)
+        print("Mismatch: %s, %s => %s %s" % (
+            x,y, calc_x, calc_y))
 
     return lat, lon
 
@@ -424,13 +426,13 @@ def gaussian(prices, lat, lon, ignore=None):
 
 
 def start(title, *fnames):
-    print "loading data..."
+    print("loading data...")
     priced_points= load_prices(fnames)
 
-    print "pricing all the points..."
+    print("pricing all the points...")
     prices = {}
     for x in range(MAX_X):
-        print "  %s/%s" % (x, MAX_X)
+        print("  %s/%s" % (x, MAX_X))
         for y in range(MAX_Y):
             lat, lon = pixel_to_ll(x,y)
             prices[x,y] = gaussian(priced_points, lat, lon)
@@ -459,13 +461,13 @@ def start(title, *fnames):
       if min_price:
         min_price = '$%s' % min_price
 
-      print ('<font color="#%s%s%s">&#9608;</font> '
+      print(('<font color="#%s%s%s">&#9608;</font> '
              '<span>%s&ndash;%s</span><br>' % (
                  hex(r)[2:].zfill(2),
                  hex(g)[2:].zfill(2),
                  hex(b)[2:].zfill(2),
                  min_price,
-                 max_price))
+                 max_price)))
 
 if __name__ == "__main__":
     start(*sys.argv[1:])
