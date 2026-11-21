@@ -151,19 +151,20 @@ The map page uses Google Maps like the live site.  If the API key rejects
 the origin (likely on localhost), it falls back to Leaflet with OSM tiles.
 Add `?leaflet` to force that.
 
-## Deploying (when you're happy)
+## Deployment
 
-1. Pull this branch into `/home/jefftk/code/apartment_prices` on ps.
-2. Copy the `apts-download-*.txt` raw files from your laptop to
-   `/home/jefftk/jtk/apartment_prices/` too, so 2026 gets building-row
-   filtering.  ps has 2016–2018 raw files; it doesn't have the 2026 ones.
-3. Run `draw_rentmap.sh`.  It writes to `jtk/apartment_prices/v3/`, so the
-   current map keeps working; once it looks right, point the main URL at
-   `v3/` (or move it).
-4. The value PNGs are ~0.5MB each, versus ~0.1MB for v2 images.  If that's too
-   much, a 500px grid would make them ~4x smaller at some cost in sharpness.
-   That means `MAP_PX = 500` in `rentmap.py`, re-running `build_mask.py`, and
-   changing `W`/`H` in `site/index.html`.
+v3 replaced the v2 page on 2026-11-20.
+- `draw_rentmap.sh` is installed on ps as `/home/jefftk/draw_heatmaps.sh` (the
+  v2 script is saved next to it as `draw_heatmaps.sh.v2`).
+- It writes into `jtk/apartment_prices/`, where the new `index.html`
+  replaced the v2 one (saved as `index.html.pre_v3`).
+- The v2 images and metadata are still there, untouched.
+- Copy each month's `apts-download-<ts>.txt` to ps along with the `.txt`, so
+  building summary rows get filtered.
+- The value PNGs are ~0.5MB each, versus ~0.1MB for v2 images.  If that's too
+  much, a 500px grid would make them ~4x smaller at some cost in sharpness.
+  That means `MAP_PX = 500` in `rentmap.py`, re-running `build_mask.py`, and
+  changing `W`/`H` in `site/index.html`.
 
 ## Things I'd like your eye on
 

@@ -1,17 +1,14 @@
 #!/bin/bash
-# Draft replacement for /home/jefftk/draw_heatmaps.sh, for rent map v3.
-# NOT INSTALLED: review, then copy to ps.
+# Monthly rent map build (v3).  Installed on ps as /home/jefftk/draw_heatmaps.sh.
 #
-# Differences from draw_heatmaps.sh:
-#  - Builds every month with build_rentmap.py into $OUT_DIR (a v3/
-#    subdirectory, so the current map keeps working side by side until you
-#    switch over).  Months already built with the current parameters are
+#  - Builds every month with build_rentmap.py into the main apartment_prices
+#    directory.  Months already built with the current parameters are
 #    skipped, and each month's files are written atomically, so a crash just
 #    means the next run redoes that month: no .started/.finished markers that
 #    can get stuck.
 #  - The front end (site/index.html, site/trends.html) is copied from the repo
-#    on each run instead of being edited in place with grep.
-#  - Still regenerates data-listing.html like before.
+#    on each run instead of being edited in place.
+#  - Still regenerates data-listing.html like the v2 script did.
 #
 # Requirements on ps (already present): python3, numpy, scipy, pillow.
 
@@ -19,7 +16,7 @@ set -euo pipefail
 
 CODE_DIR=/home/jefftk/code/apartment_prices
 WORKING_DIR=/home/jefftk/jtk/apartment_prices
-OUT_DIR=$WORKING_DIR/v3
+OUT_DIR=$WORKING_DIR
 
 DATA_LISTING=$WORKING_DIR/data-listing.html
 : > "$DATA_LISTING.tmp"
