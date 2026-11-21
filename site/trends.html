@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Boston Rent Trends</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root {
+    color-scheme: light;
+    --surface-0: #f4f3ef;
+    --surface-1: #fcfcfb;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #7a7974;
+    --grid: #e4e3de;
+    --axis: #b9b8b2;
+    --border: #dddcd6;
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --series-4: #eda100;
+    --series-5: #e87ba4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --surface-0: #121211;
+      --surface-1: #1a1a19;
+      --text-primary: #f0efec;
+      --text-secondary: #c3c2b7;
+      --text-muted: #8f8e86;
+      --grid: #2c2c2a;
+      --axis: #4a4a46;
+      --border: #333331;
+      --series-1: #3987e5;
+      --series-2: #d95926;
+      --series-3: #199e70;
+      --series-4: #c98500;
+      --series-5: #d55181;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-0: #121211; --surface-1: #1a1a19; --text-primary: #f0efec;
+    --text-secondary: #c3c2b7; --text-muted: #8f8e86; --grid: #2c2c2a; --axis: #4a4a46;
+    --border: #333331; --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70;
+    --series-4: #c98500; --series-5: #d55181;
+  }
+  body { margin: 0; background: var(--surface-0); color: var(--text-primary);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  .sub { color: var(--text-secondary); margin: 0 0 16px; }
+  .filters { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin: 0 0 16px;
+    position: sticky; top: 0; background: var(--surface-0); padding: 8px 0; z-index: 5; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .seg button { border: 0; background: var(--surface-1); color: var(--text-secondary); padding: 5px 10px;
+    font: inherit; font-size: 13px; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--text-primary); color: var(--surface-1); }
+  select { font: inherit; font-size: 13px; padding: 4px 6px; background: var(--surface-1); color: var(--text-primary);
+    border: 1px solid var(--border); border-radius: 6px; }
+  .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px 10px; margin: 0 0 16px; }
+  .card h2 { font-size: 16px; margin: 0 0 2px; }
+  .card p.note { color: var(--text-secondary); font-size: 13px; margin: 0 0 8px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; color: var(--text-secondary); margin: 0 0 4px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 16px; height: 2px; border-radius: 1px; display: inline-block; }
+  .chart { position: relative; }
+  .chart svg { display: block; width: 100%; overflow: visible; }
+  .chart text { fill: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .chart text.dl { font-size: 12px; fill: var(--text-secondary); }
+  .tip { position: absolute; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 8px; font-size: 12px; box-shadow: 0 2px 6px rgba(0,0,0,.12);
+    white-space: nowrap; display: none; z-index: 3; }
+  .tip .d { color: var(--text-secondary); margin-bottom: 2px; }
+  .tip .r { display: flex; align-items: center; gap: 6px; }
+  .tip .r i { width: 12px; height: 2px; display: inline-block; }
+  .tip .r b { font-variant-numeric: tabular-nums; color: var(--text-primary); }
+  .tip .r span { color: var(--text-secondary); }
+  .multiples { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 14px; }
+  .multiples .m h3 { font-size: 13px; margin: 0; font-weight: 600; }
+  .multiples .m .v { font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  details { margin-top: 8px; }
+  summary { cursor: pointer; color: var(--text-secondary); font-size: 13px; }
+  .tablewrap { overflow-x: auto; max-height: 420px; overflow-y: auto; }
+  table { border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; width: 100%; }
+  th, td { padding: 3px 8px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { position: sticky; top: 0; background: var(--surface-1); color: var(--text-secondary); font-weight: 600; }
+  a { color: var(--series-1); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Boston rent trends</h1>
+  <p class="sub">From monthly scrapes of Padmapper listings since 2013, the same data behind the
+    <a href="index.html">rent map</a>.</p>
+
+  <div class="filters" role="group" aria-label="Filters for every chart below">
+    <div class="seg" id="range" aria-label="Time range">
+      <button data-years="0" aria-pressed="true">All</button>
+      <button data-years="10">10 years</button>
+      <button data-years="5">5 years</button>
+      <button data-years="2">2 years</button>
+    </div>
+    <div class="seg" id="dollars" aria-label="Dollars">
+      <button data-real="0" aria-pressed="true">Dollars at the time</button>
+      <button data-real="1">Today's dollars</button>
+    </div>
+    <label>Size <select id="size">
+      <option value="0">Studio</option><option value="1">1BR</option><option value="2" selected>2BR</option>
+      <option value="3">3BR</option><option value="4">4BR</option><option value="5">5BR</option>
+    </select></label>
+  </div>
+
+  <section class="card">
+    <h2 id="t-typical">Typical rent</h2>
+    <p class="note">The map estimate is the median over every home in the area (2020 Census
+      housing units) of the map's price at that spot, so a month with unusually
+      many listings in pricey areas doesn't read as a price rise.  It sits below
+      the listing medians because listings are concentrated in pricier
+      neighborhoods.  The two medians are raw: listings that are new that
+      month, and everything on the market.  The last runs high because
+      overpriced units stay listed longer.</p>
+    <div class="legend" id="lg-typical"></div>
+    <div class="chart" id="c-typical"></div>
+  </section>
+
+  <section class="card">
+    <h2>Size premium at the same location</h2>
+    <p class="note">Rent of each size relative to a 2BR on the same block, estimated jointly with the map.</p>
+    <div class="legend" id="lg-mult"></div>
+    <div class="chart" id="c-mult"></div>
+  </section>
+
+  <section class="card">
+    <h2>Listings per month</h2>
+    <p class="note">Everything listed at the time of each scrape, and the listings that were new that month
+      (counting a relisted unit only once).  Short scrapes and gaps in the record show up as dips.</p>
+    <div class="legend" id="lg-count"></div>
+    <div class="chart" id="c-count"></div>
+  </section>
+
+  <section class="card">
+    <h2 id="t-places">By neighborhood</h2>
+    <p class="note">Map estimate averaged over homes within 300m of each spot, on a shared scale,
+      sorted by the latest value.  Gaps are months without enough nearby data.</p>
+    <div class="multiples" id="c-places"></div>
+  </section>
+
+  <section class="card">
+    <h2>Data table</h2>
+    <details><summary>Show every month</summary><div class="tablewrap" id="table"></div></details>
+    <p class="note" style="margin-top:8px">Download: <a href="trends.json">trends.json</a>,
+      <a href="rents_over_time_new.tsv">new-listing medians (TSV)</a>.  Today's dollars use CPI-U
+      (<span id="cpi-month"></span>).</p>
+  </section>
+</main>
+
+<script>
+"use strict";
+const SIZE_NAMES = ["Studio", "1BR", "2BR", "3BR", "4BR", "5BR"];
+const S = n => `var(--series-${n})`;
+const state = { years: 0, real: false, size: 2 };
+let T = null;
+
+function money(x) { return x == null || isNaN(x) ? "–" : "$" + (Math.round(x / 10) * 10).toLocaleString("en-US"); }
+function el(tag, attrs, parent) {
+  const n = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.append(n);
+  return n;
+}
+function niceTicks(lo, hi, n) {
+  const span = hi - lo, step0 = span / n, mag = Math.pow(10, Math.floor(Math.log10(step0)));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => span / s <= n) || 10 * mag;
+  const out = []; for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(v);
+  return out;
+}
+
+// Line chart.  series: [{name, color, values}], values aligned with dates.
+function lineChart(root, dates, series, opts) {
+  root.replaceChildren();
+  const width = root.clientWidth || 600, height = opts.height || 260;
+  const m = { l: opts.ml || 54, r: opts.directLabels ? 118 : 12, t: 8, b: 22 };
+  const x0 = dates[0].getTime(), x1 = dates[dates.length - 1].getTime();
+  const all = series.flatMap(s => s.values).filter(v => v != null && !isNaN(v));
+  let lo = opts.yMin != null ? opts.yMin : Math.min(...all), hi = opts.yMax != null ? opts.yMax : Math.max(...all);
+  if (opts.zero) lo = 0;
+  const pad = (hi - lo) * 0.06 || 1; if (!opts.zero && opts.yMin == null) lo -= pad; if (opts.yMax == null) hi += pad;
+  const X = t => m.l + (t - x0) / (x1 - x0 || 1) * (width - m.l - m.r);
+  const Y = v => m.t + (1 - (v - lo) / (hi - lo)) * (height - m.t - m.b);
+  const svg = el("svg", { viewBox: `0 0 ${width} ${height}`, height, role: "img", "aria-label": opts.label || "" }, root);
+
+  for (const v of niceTicks(lo, hi, opts.yTicks || 5)) {
+    el("line", { x1: m.l, x2: width - m.r, y1: Y(v), y2: Y(v), stroke: "var(--grid)", "stroke-width": 1 }, svg);
+    el("text", { x: m.l - 6, y: Y(v) + 4, "text-anchor": "end" }, svg).textContent = opts.yFormat(v);
+  }
+  const y0 = dates[0].getFullYear(), y1 = dates[dates.length - 1].getFullYear();
+  const every = Math.max(1, Math.ceil((y1 - y0 + 1) / Math.max(2, Math.floor((width - m.l - m.r) / 60))));
+  for (let y = y0; y <= y1 + 1; y++) {
+    const t = new Date(y, 0, 1).getTime();
+    if (t < x0 || t > x1 || (y - y0) % every) continue;
+    el("line", { x1: X(t), x2: X(t), y1: height - m.b, y2: height - m.b + 4, stroke: "var(--axis)" }, svg);
+    el("text", { x: X(t), y: height - 6, "text-anchor": "middle" }, svg).textContent = y;
+  }
+  el("line", { x1: m.l, x2: width - m.r, y1: height - m.b, y2: height - m.b, stroke: "var(--axis)" }, svg);
+
+  for (const s of series) {
+    let d = "", pen = false;
+    s.values.forEach((v, i) => {
+      if (v == null || isNaN(v)) { pen = false; return; }
+      d += (pen ? "L" : "M") + X(dates[i].getTime()).toFixed(1) + "," + Y(v).toFixed(1); pen = true;
+    });
+    el("path", { d, fill: "none", stroke: s.color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }, svg);
+  }
+  if (opts.directLabels) {
+    // label each series at its last value, nudged apart to avoid collisions
+    const ends = series.map(s => {
+      let i = s.values.length - 1; while (i >= 0 && (s.values[i] == null || isNaN(s.values[i]))) i--;
+      return { s, y: i >= 0 ? Y(s.values[i]) : null };
+    }).filter(e => e.y != null).sort((a, b) => a.y - b.y);
+    for (let k = 1; k < ends.length; k++) if (ends[k].y - ends[k - 1].y < 14) ends[k].y = ends[k - 1].y + 14;
+    for (const e of ends) el("text", { x: width - m.r + 8, y: e.y + 4, class: "dl" }, svg).textContent = e.s.name;
+  }
+
+  // hover: crosshair snaps to the nearest month, tooltip lists every series
+  const tip = document.createElement("div"); tip.className = "tip"; root.append(tip);
+  const hair = el("line", { y1: m.t, y2: height - m.b, stroke: "var(--axis)", "stroke-width": 1, visibility: "hidden" }, svg);
+  const dots = series.map(s => el("circle", { r: 4, fill: s.color, stroke: "var(--surface-1)", "stroke-width": 2, visibility: "hidden" }, svg));
+  const hit = el("rect", { x: m.l, y: 0, width: width - m.l - m.r, height, fill: "transparent", tabindex: 0 }, svg);
+  let cur = dates.length - 1;
+  function show(i) {
+    cur = i;
+    const xp = X(dates[i].getTime());
+    hair.setAttribute("x1", xp); hair.setAttribute("x2", xp); hair.setAttribute("visibility", "visible");
+    tip.replaceChildren();
+    const dd = document.createElement("div"); dd.className = "d"; dd.textContent = T.months[opts.offset + i]; tip.append(dd);
+    series.forEach((s, k) => {
+      const v = s.values[i], ok = v != null && !isNaN(v);
+      dots[k].setAttribute("visibility", ok ? "visible" : "hidden");
+      if (ok) { dots[k].setAttribute("cx", xp); dots[k].setAttribute("cy", Y(v)); }
+      const r = document.createElement("div"); r.className = "r";
+      const key = document.createElement("i"); key.style.background = s.color;
+      const b = document.createElement("b"); b.textContent = ok ? opts.yFormatTip(v) : "–";
+      const n = document.createElement("span"); n.textContent = s.name;
+      r.append(key, b, n); tip.append(r);
+    });
+    tip.style.display = "block";
+    const tw = tip.offsetWidth;
+    tip.style.left = Math.min(Math.max(0, xp + 12), width - tw) + "px";
+    tip.style.top = "4px";
+    if (xp + 12 + tw > width) tip.style.left = Math.max(0, xp - tw - 12) + "px";
+  }
+  function hide() { hair.setAttribute("visibility", "hidden"); dots.forEach(d => d.setAttribute("visibility", "hidden")); tip.style.display = "none"; }
+  function nearest(evt) {
+    const r = svg.getBoundingClientRect(), xp = (evt.clientX - r.left) * width / r.width;
+    const t = x0 + (xp - m.l) / (width - m.l - m.r) * (x1 - x0);
+    let best = 0, bd = Infinity;
+    dates.forEach((d, i) => { const dd = Math.abs(d.getTime() - t); if (dd < bd) { bd = dd; best = i; } });
+    return best;
+  }
+  hit.addEventListener("pointermove", e => show(nearest(e)));
+  hit.addEventListener("pointerleave", hide);
+  hit.addEventListener("focus", () => show(cur));
+  hit.addEventListener("blur", hide);
+  hit.addEventListener("keydown", e => {
+    if (e.key === "ArrowLeft") { show(Math.max(0, cur - 1)); e.preventDefault(); }
+    if (e.key === "ArrowRight") { show(Math.min(dates.length - 1, cur + 1)); e.preventDefault(); }
+  });
+}
+
+function legend(id, series) {
+  const lg = document.getElementById(id); lg.replaceChildren();
+  for (const s of series) {
+    const sp = document.createElement("span"), i = document.createElement("i");
+    i.style.background = s.color; sp.append(i, document.createTextNode(s.name)); lg.append(sp);
+  }
+}
+
+function render() {
+  const n = T.months.length;
+  let start = 0;
+  if (state.years) {
+    const cutoff = new Date(T.months[n - 1]); cutoff.setFullYear(cutoff.getFullYear() - state.years);
+    start = T.months.findIndex(d => new Date(d) >= cutoff);
+  }
+  const idx = [...Array(n - start).keys()].map(i => i + start);
+  const dates = idx.map(i => new Date(T.months[i] + "T12:00:00"));
+  const b = String(state.size);
+  const rf = i => state.real && T.cpi[i] ? T.cpi_latest / T.cpi[i] : 1;
+  const pick = (arr, f) => idx.map(i => arr[i] == null ? null : f(arr[i], i));
+  const dollars = state.real ? " (today's dollars)" : "";
+
+  document.getElementById("t-typical").textContent = "Typical " + SIZE_NAMES[state.size] + " rent" + dollars;
+  const typical = [
+    { name: "Map estimate", color: S(1), values: pick(T.city_2br, (v, i) => v * T.bedroom_mult[b][i] * rf(i)) },
+    { name: "Median new listing", color: S(2), values: pick(T.new_median[b], (v, i) => v * rf(i)) },
+    { name: "Median of all listed", color: S(3), values: pick(T.all_median[b], (v, i) => v * rf(i)) },
+  ];
+  legend("lg-typical", typical);
+  lineChart(document.getElementById("c-typical"), dates, typical,
+    { yFormat: money, yFormatTip: money, directLabels: true, offset: start, label: "Typical rent over time" });
+
+  const mult = [0, 1, 3, 4, 5].map((k, j) => ({ name: SIZE_NAMES[k], color: S(j + 1), values: pick(T.bedroom_mult[String(k)], v => v) }));
+  legend("lg-mult", mult);
+  lineChart(document.getElementById("c-mult"), dates, mult,
+    { yFormat: v => v.toFixed(1) + "×", yFormatTip: v => v.toFixed(2) + "×", offset: start, label: "Size multipliers relative to 2BR" });
+
+  const counts = [
+    { name: "Listed", color: S(1), values: pick(T.n_listed, v => v) },
+    { name: "New that month", color: S(2), values: pick(T.n_new, v => v) },
+  ];
+  legend("lg-count", counts);
+  lineChart(document.getElementById("c-count"), dates, counts,
+    { yFormat: v => v >= 1000 ? (v / 1000) + "k" : String(v), yFormatTip: v => v.toLocaleString("en-US"),
+      zero: true, directLabels: true, offset: start, label: "Listings per month" });
+
+  // neighborhood small multiples on one shared scale
+  document.getElementById("t-places").textContent = "By neighborhood: " + SIZE_NAMES[state.size] + dollars;
+  const places = Object.keys(T.places).map(name => ({
+    name, values: pick(T.places[name], (v, i) => v * T.bedroom_mult[b][i] * rf(i)) }));
+  const lastVal = p => { for (let i = p.values.length - 1; i >= 0; i--) if (p.values[i] != null) return p.values[i]; return -1; };
+  places.sort((a, c) => lastVal(c) - lastVal(a));
+  const allv = places.flatMap(p => p.values).filter(v => v != null);
+  const yMin = Math.min(...allv), yMax = Math.max(...allv);
+  const wrap = document.getElementById("c-places"); wrap.replaceChildren();
+  for (const p of places) {
+    const d = document.createElement("div"); d.className = "m";
+    const h = document.createElement("h3"); h.textContent = p.name;
+    const v = document.createElement("div"); v.className = "v"; v.textContent = "latest " + money(lastVal(p));
+    const c = document.createElement("div"); c.className = "chart";
+    d.append(h, v, c); wrap.append(d);
+    lineChart(c, dates, [{ name: p.name, color: S(1), values: p.values }],
+      { height: 110, yMin, yMax, yTicks: 3, ml: 44, offset: start,
+        yFormat: v => "$" + (v / 1000).toFixed(1) + "k", yFormatTip: money, label: p.name });
+  }
+
+  // table view
+  const tbl = document.createElement("table");
+  const head = ["Month", "Map estimate", "Median new", "Median all", "Listed", "New", "CPI-U"];
+  const thead = tbl.createTHead().insertRow();
+  head.forEach(t => { const th = document.createElement("th"); th.textContent = t; thead.append(th); });
+  const tb = tbl.createTBody();
+  for (let j = idx.length - 1; j >= 0; j--) {
+    const i = idx[j], r = tb.insertRow();
+    [T.months[i], money(typical[0].values[j]), money(typical[1].values[j]), money(typical[2].values[j]),
+     T.n_listed[i].toLocaleString(), T.n_new[i].toLocaleString(), T.cpi[i] ? T.cpi[i].toFixed(1) : "–"]
+      .forEach(t => { r.insertCell().textContent = t; });
+  }
+  document.getElementById("table").replaceChildren(tbl);
+}
+
+function wireSeg(id, fn) {
+  const seg = document.getElementById(id);
+  seg.addEventListener("click", e => {
+    const btn = e.target.closest("button"); if (!btn) return;
+    seg.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === btn ? "true" : "false"));
+    fn(btn); render();
+  });
+}
+
+fetch("trends.json").then(r => r.json()).then(t => {
+  T = t;
+  document.getElementById("cpi-month").textContent = "latest " + (T.cpi_latest_month || "n/a");
+  wireSeg("range", b => { state.years = +b.dataset.years; });
+  wireSeg("dollars", b => { state.real = b.dataset.real === "1"; });
+  document.getElementById("size").onchange = e => { state.size = +e.target.value; render(); };
+  render();
+  let w = window.innerWidth;
+  new ResizeObserver(() => { if (Math.abs(window.innerWidth - w) > 20) { w = window.innerWidth; render(); } }).observe(document.body);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Boston Rent Map</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root {
+    --panel-bg: #fcfcfb;
+    --text: #0b0b0b;
+    --text-2: #52514e;
+    --border: #d9d8d3;
+  }
+  html, body { height: 100%; margin: 0; padding: 0;
+    font: 14px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: var(--text); background: #e8e7e2; }
+  #map { position: absolute; inset: 0; }
+  #panel {
+    position: absolute; top: 12px; right: 12px; z-index: 1000;
+    background: var(--panel-bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 10px 12px; width: 250px;
+    max-height: calc(100% - 48px); overflow-y: auto;
+    box-shadow: 0 1px 4px rgba(0,0,0,.15);
+  }
+  #panel h1 { font-size: 15px; margin: 0 0 6px; }
+  #panel label { display: block; margin: 6px 0 2px; color: var(--text-2); font-size: 12px; }
+  #panel select, #panel input[type=range] { width: 100%; box-sizing: border-box; }
+  .row { display: flex; align-items: center; gap: 6px; }
+  .row select { flex: 1; }
+  .row button { min-width: 32px; }
+  .checks label { display: flex; align-items: center; gap: 6px; color: var(--text); font-size: 13px; margin: 3px 0; }
+  #legend { margin-top: 8px; display: grid; grid-template-columns: 1fr 1fr; column-gap: 8px; }
+  .sw { display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; font-size: 12.5px; }
+  .sw i { display: inline-block; width: 14px; height: 12px; border-radius: 2px; flex: none; }
+  #summary { margin-top: 8px; font-size: 12px; color: var(--text-2); }
+  #summary b { color: var(--text); font-weight: 600; }
+  #links { margin-top: 8px; font-size: 12.5px; }
+  #links a { margin-right: 10px; }
+  #toggle-panel { display: none; }
+  .popup { font-size: 13px; line-height: 1.4; min-width: 170px; }
+  .popup table { border-collapse: collapse; margin-top: 4px; }
+  .popup td { padding: 0 8px 0 0; font-variant-numeric: tabular-nums; }
+  .popup td.sel { font-weight: 700; }
+  .popup .muted { color: #6b6a66; font-size: 12px; }
+  #status { position: absolute; left: 12px; bottom: 24px; z-index: 1000; background: var(--panel-bg);
+    border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; font-size: 12px; display: none; }
+  @media (max-width: 600px) {
+    #panel { left: 8px; right: 8px; top: auto; bottom: 8px; width: auto; max-height: 55%; }
+    #panel.collapsed > :not(#toggle-panel):not(h1) { display: none; }
+    #toggle-panel { display: block; position: absolute; top: 8px; right: 10px; }
+  }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="status"></div>
+<div id="panel">
+  <button id="toggle-panel" type="button" aria-label="Show or hide controls">☰</button>
+  <h1>Boston rent map</h1>
+
+  <label for="date">Month</label>
+  <div class="row">
+    <button id="earlier" type="button" aria-label="Earlier month">&lt;</button>
+    <select id="date"></select>
+    <button id="later" type="button" aria-label="Later month">&gt;</button>
+  </div>
+
+  <label for="size">Apartment size</label>
+  <select id="size">
+    <option value="0">Studio</option>
+    <option value="1">1 bedroom</option>
+    <option value="2" selected>2 bedrooms</option>
+    <option value="3">3 bedrooms</option>
+    <option value="4">4 bedrooms</option>
+    <option value="5">5 bedrooms</option>
+  </select>
+
+  <label for="mode">Show</label>
+  <select id="mode">
+    <option value="nominal">Rent (dollars at the time)</option>
+    <option value="real">Rent (today's dollars)</option>
+    <option value="relative">Relative to the city as a whole</option>
+    <option value="change">Change since another month</option>
+  </select>
+
+  <div id="cmp-wrap" style="display:none">
+    <label for="cmp">Compared with</label>
+    <select id="cmp"></select>
+    <div class="checks"><label><input type="checkbox" id="cmp-real" checked> Adjust for inflation</label></div>
+  </div>
+
+  <div id="legend" aria-label="Color key"></div>
+
+  <label for="opacity">Opacity</label>
+  <input type="range" id="opacity" min="0.2" max="1" step="0.05" value="0.75">
+
+  <div class="checks">
+    <label><input type="checkbox" id="fade" checked> Fade where data is thin</label>
+    <label><input type="checkbox" id="mask" checked> Hide where nobody lives</label>
+    <label><input type="checkbox" id="dots"> Show this month's new listings</label>
+  </div>
+
+  <div id="summary"></div>
+  <div id="links"><a href="trends.html">Trends</a><a href="/">Main site</a><a href="#" id="about-link">About</a></div>
+  <div id="about" style="display:none; font-size:12px; color:var(--text-2); margin-top:6px">
+    Each month's map pools new listings from the past year (weighted toward
+    recent months and adjusted for citywide price changes), counting each
+    listing once when it first appears.  Prices are a weighted average of
+    nearby listings, using the smallest radius with enough data.  Sizes differ
+    by a fixed multiplier estimated from listings at the same locations.
+    Click anywhere for the estimate at that spot.
+  </div>
+</div>
+
+<script>
+"use strict";
+const BOUNDS = { south: 42.255594, west: -71.1828231, north: 42.4351936, east: -70.9758 };
+const CENTER = { lat: 42.3454, lng: -71.0793 };
+const SIZE_NAMES = ["Studio", "1BR", "2BR", "3BR", "4BR", "5BR"];
+
+// v2's magma colors, highest price first, and its 2BR dollar thresholds.
+const MAGMA = ["#000003","#07051b","#150e38","#28115a","#3e0f72","#55147d","#6a1c81",
+  "#7e2482","#942b80","#aa327d","#c13a76","#d5436d","#e85362","#f4675c","#fb7f5e",
+  "#fe9a6a","#ffb27a","#ffcc8f","#fde4a5"];
+const DOLLAR_BUCKETS = [6000,5000,4500,4000,3800,3600,3400,3200,3000,2800,2600,2400,2200,2100,2000,1900,1800,1700];
+const REL_BUCKETS = [2.0,1.75,1.6,1.5,1.4,1.3,1.2,1.15,1.1,1.05,1.0,0.95,0.9,0.85,0.8,0.75,0.7,0.6];
+// Diverging: blue = got cheaper, gray = little change, red = got pricier.
+const DIV = [
+  { lo: 0.50, color: "#8a2120" }, { lo: 0.30, color: "#b8312f" }, { lo: 0.20, color: "#e34948" },
+  { lo: 0.10, color: "#e87a75" }, { lo: 0.05, color: "#f0a9a5" }, { lo: 0.02, color: "#f7d4d2" },
+  { lo: -0.02, color: "#f0efec" }, { lo: -0.05, color: "#cde2fb" }, { lo: -0.10, color: "#9ec5f4" },
+  { lo: -0.20, color: "#6da7ec" }, { lo: -0.30, color: "#3987e5" }, { lo: -Infinity, color: "#184f95" },
+];
+// Fade where the estimate rests on little data: few effective listings, or a
+// kernel that had to grow wide to find enough of them.
+const NEFF_LO = 3, NEFF_HI = 12;
+const SIGMA_FULL = 700, SIGMA_ZERO = 1500;   // meters
+
+const state = { dates: [], idx: 0, size: 2, mode: "nominal", cmpIdx: 0, cmpReal: true,
+                opacity: 0.75, fade: true, mask: true, dots: false };
+const cache = {};       // date -> {meta, logv: Float32Array, neff: Uint8Array, dots}
+let trends = null, maskData = null, basemap = null;
+const W = 1000, H = 1000;
+const canvas = document.createElement("canvas");
+canvas.width = W; canvas.height = H;
+
+function hexToRgb(h) { const n = parseInt(h.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; }
+const MAGMA_RGB = MAGMA.map(hexToRgb), DIV_RGB = DIV.map(d => hexToRgb(d.color));
+
+function status(msg) {
+  const s = document.getElementById("status");
+  s.textContent = msg || ""; s.style.display = msg ? "block" : "none";
+}
+
+async function getJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(url + ": " + r.status);
+  return r.json();
+}
+
+async function decodePNG(url) {
+  const blob = await (await fetch(url)).blob();
+  const bmp = await createImageBitmap(blob, { premultiplyAlpha: "none", colorSpaceConversion: "none" });
+  const c = document.createElement("canvas"); c.width = bmp.width; c.height = bmp.height;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(bmp, 0, 0);
+  return ctx.getImageData(0, 0, bmp.width, bmp.height).data;
+}
+
+async function loadMonth(date) {
+  if (cache[date]) return cache[date];
+  const meta = await getJSON("rentmap." + date + ".json");
+  const px = await decodePNG("rentmap." + date + ".png");
+  const e = meta.encoding, lo = e.log_lo, step = e.step;
+  const logv = new Float32Array(W * H), neff = new Uint8Array(W * H), conf = new Float32Array(W * H);
+  const sigmaOf = q => e.sigma0_m * Math.pow(e.sigma_ratio, q / 2);
+  for (let i = 0; i < W * H; i++) {
+    const code = (px[4 * i] << 8) | px[4 * i + 1], v = code & 2047;
+    logv[i] = v === 0 ? NaN : lo + (v - 1) * step;
+    neff[i] = px[4 * i + 2];
+    const sig = sigmaOf(code >> 11);
+    const cs = Math.max(0, Math.min(1, (SIGMA_ZERO - sig) / (SIGMA_ZERO - SIGMA_FULL)));
+    const cn = Math.max(0, Math.min(1, (neff[i] - NEFF_LO) / (NEFF_HI - NEFF_LO)));
+    conf[i] = Math.min(cs, cn);
+  }
+  cache[date] = { meta, logv, neff, conf, sigmaOf, px, dots: null };
+  return cache[date];
+}
+
+async function loadDots(date) {
+  const m = cache[date];
+  if (!m.dots) m.dots = await getJSON("dots." + date + ".json");
+  return m.dots;
+}
+
+function cpiFor(date) {
+  if (!trends) return null;
+  const i = trends.months.indexOf(date);
+  return i >= 0 ? trends.cpi[i] : null;
+}
+function realFactor(date) {
+  const c = cpiFor(date);
+  return c && trends.cpi_latest ? trends.cpi_latest / c : 1;
+}
+function money(x) {
+  const r = x >= 1000 ? Math.round(x / 10) * 10 : Math.round(x / 5) * 5;
+  return "$" + r.toLocaleString("en-US");
+}
+function pct(x) { return (x >= 0 ? "+" : "−") + Math.abs(Math.round(x * 100)) + "%"; }
+
+// Returns {kind, value} used for coloring pixel i, or null.
+function pixelValue(cur, old, i, rf) {
+  const v = cur.logv[i];
+  if (isNaN(v)) return null;
+  if (state.mode === "nominal") return Math.exp(v);
+  if (state.mode === "real") return Math.exp(v) * rf;
+  if (state.mode === "relative") return Math.exp(v) / cur.meta.city_2br;
+  const o = old.logv[i];
+  if (isNaN(o)) return null;
+  return Math.exp(v - o) * state.cmpFactor - 1;
+}
+
+function colorFor(val) {
+  if (state.mode === "change") {
+    for (let k = 0; k < DIV.length; k++) if (val >= DIV[k].lo) return DIV_RGB[k];
+    return DIV_RGB[DIV.length - 1];
+  }
+  const buckets = state.mode === "relative" ? REL_BUCKETS : DOLLAR_BUCKETS;
+  for (let k = 0; k < buckets.length; k++) if (val > buckets[k]) return MAGMA_RGB[k];
+  return MAGMA_RGB[MAGMA_RGB.length - 1];
+}
+
+async function render() {
+  const date = state.dates[state.idx];
+  status("Loading " + date + "…");
+  const cur = await loadMonth(date);
+  let old = null;
+  if (state.mode === "change") {
+    old = await loadMonth(state.dates[state.cmpIdx]);
+    // change for the chosen size: surfaces are 2BR-equivalent, and the size
+    // multipliers can drift between the two months
+    state.cmpFactor = (state.cmpReal
+      ? realFactor(date) / realFactor(state.dates[state.cmpIdx]) : 1) *
+      sizeMult(cur.meta) / old.meta.bedroom_mult[String(state.size)];
+  }
+  const rf = realFactor(date);
+  const ctx = canvas.getContext("2d");
+  const img = ctx.createImageData(W, H);
+  const d = img.data;
+  for (let i = 0; i < W * H; i++) {
+    if (state.mask && maskData && !maskData[i]) continue;
+    const val = pixelValue(cur, old, i, rf);
+    if (val === null) continue;
+    let a = 1;
+    if (state.fade) {
+      a = old ? Math.min(cur.conf[i], old.conf[i]) : cur.conf[i];
+      if (a === 0) continue;
+    }
+    const c = colorFor(val);
+    d[4 * i] = c[0]; d[4 * i + 1] = c[1]; d[4 * i + 2] = c[2]; d[4 * i + 3] = Math.round(255 * a);
+  }
+  ctx.putImageData(img, 0, 0);
+  if (state.dots) {
+    const dots = await loadDots(date);
+    ctx.fillStyle = "rgba(0,0,0,0.85)";
+    for (const [lat, lon] of dots) {
+      const x = (lon - BOUNDS.west) / (BOUNDS.east - BOUNDS.west) * W;
+      const y = (BOUNDS.north - lat) / (BOUNDS.north - BOUNDS.south) * H;
+      ctx.fillRect(x - 1, y - 1, 2, 2);
+    }
+  }
+  basemap.setOverlay(canvas.toDataURL("image/png"), state.opacity);
+  drawLegend(cur);
+  drawSummary(cur);
+  status("");
+}
+
+function sizeMult(meta) { return meta.bedroom_mult[String(state.size)]; }
+
+function drawLegend(cur) {
+  const el = document.getElementById("legend");
+  el.replaceChildren();
+  const items = [];
+  if (state.mode === "change") {
+    for (let k = 0; k < DIV.length; k++) {
+      const lo = DIV[k].lo, hi = k === 0 ? Infinity : DIV[k - 1].lo;
+      let label;
+      if (k === 0) label = pct(lo) + " or more";
+      else if (lo === -Infinity) label = "below " + pct(hi);
+      else label = pct(lo) + " to " + pct(hi);
+      items.push([DIV[k].color, label]);
+    }
+  } else if (state.mode === "relative") {
+    REL_BUCKETS.forEach((b, k) => items.push([MAGMA[k], b.toFixed(2) + "× +"]));
+    items.push([MAGMA[MAGMA.length - 1], "below " + REL_BUCKETS[REL_BUCKETS.length - 1].toFixed(2) + "×"]);
+  } else {
+    // Colors are thresholds on 2BR-equivalent rent; label them for the chosen size.
+    const m = sizeMult(cur.meta);
+    DOLLAR_BUCKETS.forEach((b, k) => items.push([MAGMA[k], money(b * m) + "+"]));
+    items.push([MAGMA[MAGMA.length - 1], "under " + money(DOLLAR_BUCKETS[DOLLAR_BUCKETS.length - 1] * m)]);
+  }
+  for (const [color, label] of items) {
+    const s = document.createElement("div"); s.className = "sw";
+    const i = document.createElement("i"); i.style.background = color;
+    if (color === "#f0efec" || color === "#fde4a5") i.style.outline = "1px solid #c9c8c2";
+    s.append(i, document.createTextNode(label));
+    el.append(s);
+  }
+}
+
+function drawSummary(cur) {
+  const m = cur.meta, el = document.getElementById("summary");
+  el.replaceChildren();
+  const add = (text, bold) => { const n = bold ? document.createElement("b") : document.createTextNode(text); if (bold) n.textContent = text; el.append(n); };
+  const city = m.city_2br * sizeMult(m);
+  add("Typical " + SIZE_NAMES[state.size] + " citywide: "); add(money(city), true);
+  if (state.mode === "real") { add(" ("); add(money(city * realFactor(m.date)), true); add(" today)"); }
+  el.append(document.createElement("br"));
+  add(m.n_new.toLocaleString() + " new listings this month, " + m.n_listed.toLocaleString() + " on the market; the map pools " + m.n_window.toLocaleString() + " from the past year.");
+  if (state.mode !== "nominal" && trends && trends.cpi_latest_month) {
+    el.append(document.createElement("br"));
+    add("Today's dollars = CPI-U as of " + trends.cpi_latest_month + ".");
+  }
+}
+
+function lookup(lat, lng) {
+  const x = Math.floor((lng - BOUNDS.west) / (BOUNDS.east - BOUNDS.west) * W);
+  const y = Math.floor((BOUNDS.north - lat) / (BOUNDS.north - BOUNDS.south) * H);
+  if (x < 0 || y < 0 || x >= W || y >= H) return null;
+  return y * W + x;
+}
+
+function popupFor(lat, lng) {
+  const i = lookup(lat, lng);
+  if (i === null) return null;
+  const date = state.dates[state.idx], cur = cache[date];
+  if (!cur || isNaN(cur.logv[i])) return null;
+  const wrap = document.createElement("div"); wrap.className = "popup";
+  const p2 = Math.exp(cur.logv[i]);
+  const real = state.mode === "real", rf = real ? realFactor(date) : 1;
+  const head = document.createElement("div");
+  if (state.mode === "relative") {
+    head.textContent = (p2 / cur.meta.city_2br).toFixed(2) + "× the city as a whole";
+  } else if (state.mode === "change") {
+    const od = state.dates[state.cmpIdx], old = cache[od];
+    if (old && !isNaN(old.logv[i])) {
+      const m = sizeMult(cur.meta), mo = old.meta.bedroom_mult[String(state.size)];
+      const ch = Math.exp(cur.logv[i] - old.logv[i]) * state.cmpFactor - 1;
+      head.textContent = SIZE_NAMES[state.size] + ": " + money(Math.exp(old.logv[i]) * mo) + " (" + od + ") → " +
+        money(p2 * m) + " (" + date + "), " + pct(ch) + (state.cmpReal ? " after inflation" : "");
+    }
+  } else {
+    head.textContent = "Estimated rent, " + date + (real ? ", today's dollars" : "") + ":";
+  }
+  wrap.append(head);
+  const t = document.createElement("table");
+  for (let b = 0; b <= 5; b++) {
+    const tr = document.createElement("tr");
+    const a = document.createElement("td"), v = document.createElement("td");
+    a.textContent = SIZE_NAMES[b]; v.textContent = money(p2 * cur.meta.bedroom_mult[String(b)] * rf);
+    if (b === state.size) { a.className = v.className = "sel"; }
+    tr.append(a, v); t.append(tr);
+  }
+  wrap.append(t);
+  const n = document.createElement("div"); n.className = "muted";
+  const ne = cur.neff[i];
+  const sig = cur.sigmaOf(((cur.px[4 * i] << 8) | cur.px[4 * i + 1]) >> 11);
+  const radius = Math.round(2 * sig / 50) * 50;
+  n.textContent = "Mostly from listings within ~" + radius.toLocaleString() + "m (the equivalent of " +
+    (ne >= 255 ? "255+" : ne) + " listings over the past year)" + (cur.conf[i] < 1 ? "; treat as rough." : ".");
+  wrap.append(n);
+  return wrap;
+}
+
+// ---- basemaps: Google Maps (as on the live site), falling back to Leaflet/OSM
+function googleBasemap() {
+  const map = new google.maps.Map(document.getElementById("map"), {
+    zoom: 13, center: CENTER, clickableIcons: false, gestureHandling: "greedy" });
+  let overlay = null, info = null;
+  const b = new google.maps.LatLngBounds({ lat: BOUNDS.south, lng: BOUNDS.west }, { lat: BOUNDS.north, lng: BOUNDS.east });
+  map.addListener("click", e => {
+    const node = popupFor(e.latLng.lat(), e.latLng.lng());
+    if (!node) return;
+    if (info) info.close();
+    info = new google.maps.InfoWindow({ content: node, position: e.latLng });
+    info.open(map);
+  });
+  return {
+    setOverlay(url, opacity) {
+      const next = new google.maps.GroundOverlay(url, b, { opacity, clickable: false });
+      next.setMap(map);
+      if (overlay) overlay.setMap(null);
+      overlay = next;
+    },
+  };
+}
+
+function leafletBasemap() {
+  document.getElementById("map").replaceChildren();
+  const map = L.map("map").setView([CENTER.lat, CENTER.lng], 13);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19, attribution: "&copy; OpenStreetMap contributors" }).addTo(map);
+  let overlay = null;
+  map.on("click", e => {
+    const node = popupFor(e.latlng.lat, e.latlng.lng);
+    if (node) L.popup().setLatLng(e.latlng).setContent(node).openOn(map);
+  });
+  return {
+    setOverlay(url, opacity) {
+      const bb = [[BOUNDS.south, BOUNDS.west], [BOUNDS.north, BOUNDS.east]];
+      if (overlay) { overlay.setUrl(url); overlay.setOpacity(opacity); }
+      else overlay = L.imageOverlay(url, bb, { opacity, interactive: false }).addTo(map);
+    },
+  };
+}
+
+function loadScript(src, css) {
+  return new Promise((resolve, reject) => {
+    if (css) { const l = document.createElement("link"); l.rel = "stylesheet"; l.href = css; document.head.append(l); }
+    const s = document.createElement("script"); s.src = src; s.onload = resolve; s.onerror = reject;
+    document.head.append(s);
+  });
+}
+
+async function useLeaflet() {
+  await loadScript("https://unpkg.com/leaflet@1.9.4/dist/leaflet.js", "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css");
+  basemap = leafletBasemap();
+}
+
+async function initBasemap() {
+  const forceLeaflet = new URLSearchParams(location.search).has("leaflet");
+  if (forceLeaflet) return useLeaflet();
+  try {
+    let failed = false;
+    window.gm_authFailure = () => { failed = true; useLeaflet().then(render); };
+    await loadScript("https://maps.googleapis.com/maps/api/js?key=AIzaSyALrS4bNPhHaZ73dACaSxD-r6oht4CX7B8");
+    if (!failed) basemap = googleBasemap();
+  } catch (e) {
+    await useLeaflet();
+  }
+}
+
+// ---- state <-> URL hash, controls
+function readHash() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  const legacy = location.hash.slice(1).split("&");   // v2 links: #YYYY-MM-DD&2
+  const date = h.get("date") || (/^\d{4}-\d\d-\d\d$/.test(legacy[0]) ? legacy[0] : null);
+  const size = h.get("size") || (legacy.length === 2 && /^\d$/.test(legacy[1]) ? legacy[1] : null);
+  if (date) { const i = state.dates.indexOf(date); if (i >= 0) state.idx = i; }
+  if (size && +size >= 0 && +size <= 5) state.size = +size;
+  if (["nominal", "real", "relative", "change"].includes(h.get("mode"))) state.mode = h.get("mode");
+  if (h.get("cmp")) { const i = state.dates.indexOf(h.get("cmp")); if (i >= 0) state.cmpIdx = i; }
+}
+function writeHash() {
+  const h = new URLSearchParams({ date: state.dates[state.idx], size: state.size, mode: state.mode });
+  if (state.mode === "change") h.set("cmp", state.dates[state.cmpIdx]);
+  history.replaceState(null, "", "#" + h.toString());
+}
+function syncControls() {
+  document.getElementById("date").value = state.idx;
+  document.getElementById("cmp").value = state.cmpIdx;
+  document.getElementById("size").value = state.size;
+  document.getElementById("mode").value = state.mode;
+  document.getElementById("cmp-wrap").style.display = state.mode === "change" ? "" : "none";
+  document.getElementById("earlier").disabled = state.idx <= 0;
+  document.getElementById("later").disabled = state.idx >= state.dates.length - 1;
+}
+function update() { syncControls(); writeHash(); render().catch(e => status("Error: " + e.message)); }
+
+function defaultCmp() {
+  // a year before the shown month, or the earliest available
+  const target = new Date(state.dates[state.idx]); target.setFullYear(target.getFullYear() - 1);
+  let best = 0;
+  state.dates.forEach((d, i) => { if (new Date(d) <= target) best = i; });
+  return best;
+}
+
+async function main() {
+  state.dates = await getJSON("dates.json");
+  state.idx = state.dates.length - 1;
+  try { trends = await getJSON("trends.json"); } catch (e) { trends = null; }
+  try {
+    const px = await decodePNG("housing_mask.png");
+    maskData = new Uint8Array(W * H);
+    for (let i = 0; i < W * H; i++) maskData[i] = px[4 * i] > 0 ? 1 : 0;
+  } catch (e) { maskData = null; }
+  state.cmpIdx = -1;
+  readHash();
+  if (state.cmpIdx < 0) state.cmpIdx = defaultCmp();
+
+  for (const id of ["date", "cmp"]) {
+    const sel = document.getElementById(id);
+    state.dates.forEach((d, i) => { const o = document.createElement("option"); o.value = i; o.textContent = d; sel.append(o); });
+  }
+  document.getElementById("date").onchange = e => { state.idx = +e.target.value; update(); };
+  document.getElementById("cmp").onchange = e => { state.cmpIdx = +e.target.value; update(); };
+  document.getElementById("earlier").onclick = () => { if (state.idx > 0) { state.idx--; update(); } };
+  document.getElementById("later").onclick = () => { if (state.idx < state.dates.length - 1) { state.idx++; update(); } };
+  document.getElementById("size").onchange = e => { state.size = +e.target.value; update(); };
+  document.getElementById("mode").onchange = e => { state.mode = e.target.value; update(); };
+  document.getElementById("cmp-real").onchange = e => { state.cmpReal = e.target.checked; update(); };
+  document.getElementById("opacity").oninput = e => { state.opacity = +e.target.value; update(); };
+  for (const k of ["fade", "mask", "dots"]) document.getElementById(k).onchange = e => { state[k] = e.target.checked; update(); };
+  document.getElementById("about-link").onclick = e => { e.preventDefault(); const a = document.getElementById("about"); a.style.display = a.style.display === "none" ? "" : "none"; };
+  document.getElementById("toggle-panel").onclick = () => document.getElementById("panel").classList.toggle("collapsed");
+  document.addEventListener("keydown", e => {
+    if (e.target.tagName === "SELECT" || e.target.tagName === "INPUT") return;
+    if (e.key === "ArrowLeft") document.getElementById("earlier").click();
+    if (e.key === "ArrowRight") document.getElementById("later").click();
+  });
+
+  await initBasemap();
+  update();
+}
+main().catch(e => status("Error: " + e.message));
+</script>
+</body>
+</html>

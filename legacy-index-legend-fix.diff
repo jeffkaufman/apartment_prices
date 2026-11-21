@@ -1,0 +1,16 @@
+--- a/index.html
++++ b/index.html
+@@ -352,9 +352,11 @@
+ 
+   function adjustForSize(price_2br, y_intercept, slope, room_size, adjustment, adjustment_2br) {
+     room_size = Number(room_size);
+-    var proportion_of_expected_price = price_2br / (y_intercept + 2*slope) / adjustment;
++    // The map shows uncorrected 2br-equivalent prices; adjustments[k] is how
++    // much k-br listings actually cost relative to that, so multiply by it.
++    var proportion_of_expected_price = price_2br / (y_intercept + 2*slope);
+     var est_global_price = y_intercept + (slope * room_size);
+-    return roundFive(est_global_price * proportion_of_expected_price * adjustment_2br);
++    return roundFive(est_global_price * proportion_of_expected_price * adjustment);
+   }
+ 
+   function setRoomSize() {

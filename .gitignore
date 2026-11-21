@@ -5,3 +5,4 @@ apts-download-*.txt
 *-static*.png
 *errors*
 
+*.tmp
