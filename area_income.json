@@ -1,0 +1,87 @@
+{
+ "description": "Median household income for the rent map area, by year. Built by build_area_income.py from Census ACS household income distributions (B19001) for each municipality, weighted by 2020 housing units inside the map bounds.",
+ "annual": {
+  "2013": 61453,
+  "2014": 65355,
+  "2015": 68928,
+  "2016": 72011,
+  "2017": 75538,
+  "2018": 81293,
+  "2019": 89655,
+  "2021": 89231,
+  "2022": 95987,
+  "2023": 108278,
+  "2024": 110240,
+  "2025": 113000
+ },
+ "towns": {
+  "Malden": {
+   "in_map_units": 20880,
+   "share_of_town": 0.7532195808232026
+  },
+  "Belmont": {
+   "in_map_units": 8205,
+   "share_of_town": 0.7539974269435765
+  },
+  "Cambridge": {
+   "in_map_units": 53907,
+   "share_of_town": 1.0
+  },
+  "Everett": {
+   "in_map_units": 18208,
+   "share_of_town": 1.0
+  },
+  "Watertown Town": {
+   "in_map_units": 8366,
+   "share_of_town": 0.4918283362727807
+  },
+  "Dedham": {
+   "in_map_units": 1403,
+   "share_of_town": 0.1341428434840807
+  },
+  "Quincy": {
+   "in_map_units": 20112,
+   "share_of_town": 0.42783296815503413
+  },
+  "Somerville": {
+   "in_map_units": 36269,
+   "share_of_town": 1.0
+  },
+  "Medford": {
+   "in_map_units": 24676,
+   "share_of_town": 0.957547535894451
+  },
+  "Revere": {
+   "in_map_units": 22525,
+   "share_of_town": 0.91792656587473
+  },
+  "Newton": {
+   "in_map_units": 5322,
+   "share_of_town": 0.15972388955582234
+  },
+  "Arlington": {
+   "in_map_units": 17819,
+   "share_of_town": 0.8708763012560481
+  },
+  "Boston": {
+   "in_map_units": 295720,
+   "share_of_town": 0.9801724880842686
+  },
+  "Winthrop Town": {
+   "in_map_units": 5214,
+   "share_of_town": 0.5910894456410838
+  },
+  "Chelsea": {
+   "in_map_units": 14554,
+   "share_of_town": 1.0
+  },
+  "Brookline": {
+   "in_map_units": 27961,
+   "share_of_town": 1.0
+  },
+  "Milton": {
+   "in_map_units": 5364,
+   "share_of_town": 0.5449004469727753
+  }
+ }
+}

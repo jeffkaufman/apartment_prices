@@ -10,6 +10,8 @@ ps and the live site are untouched.
 |---|---|
 | `rentmap.py` | Model: data loading and dedup, backfitting, adaptive FFT smoother, output encoding |
 | `build_rentmap.py` | Incremental pipeline: `python3 build_rentmap.py DATA_DIR OUT_DIR [--force]` |
+| `build_area_income.py` | Yearly: builds `area_income.json` (median household income for the map area) from Census ACS; needs a free API key |
+| `area_income.json` | Its output (checked in) |
 | `build_mask.py` | One-off: builds `housing_mask.png` and `housing_units.png` from 2020 Census blocks |
 | `housing_mask.png`, `housing_units.png` | Its outputs (checked in; only change if the bounds change) |
 | `tune_rentmap.py` | Cross-validation for parameters, and comparison against the v2 method |
@@ -87,7 +89,11 @@ about 6 minutes.
 grid (R,G = log rent and kernel width, B = effective sample size) plus JSON
 metadata.  The page colors it client-side, which enables:
 - nominal dollars, today's dollars (CPI-U from FRED), relative to the city,
-  or change since any other month (inflation-adjusted or not);
+  or change since any other month, adjusted for nothing, inflation (CPI-U),
+  non-housing prices (CPI-U less shelter, also from FRED), or median
+  household income in the map area (`area_income.json`; refresh it each
+  fall with `build_area_income.py` when new 1-year ACS data comes out,
+  otherwise later months are extrapolated at the long-run growth rate);
 - exact values on click for every size, with how much data they rest on;
 - this month's new listings as dots, opacity, fade and mask toggles.
 
@@ -177,6 +183,5 @@ v3 replaced the v2 page on 2026-11-20.
 - Months right after a gap in scraping (e.g. Sept 2022, July 2024) or the
   2016 Padmapper API change have more "new" listings than usual.  The
   location+price dedup key softens this; the pooled model absorbs it.
-- The "today's dollars" mode uses headline CPI-U.  If you'd rather use CPI
-  less shelter (as in one of your posts), it's one series ID in
-  `build_rentmap.py`.
+- The "today's dollars" mode uses headline CPI-U.  The change view can also
+  adjust by CPI less shelter or by area median income.

@@ -86,7 +86,13 @@
   <div id="cmp-wrap" style="display:none">
     <label for="cmp">Compared with</label>
     <select id="cmp"></select>
-    <div class="checks"><label><input type="checkbox" id="cmp-real" checked> Adjust for inflation</label></div>
+    <label for="cmp-adj">Adjust for</label>
+    <select id="cmp-adj">
+      <option value="none">Nothing (dollars at the time)</option>
+      <option value="cpi">Inflation</option>
+      <option value="core">Non-housing prices</option>
+      <option value="income">Median income</option>
+    </select>
   </div>
 
   <div id="legend" aria-label="Color key"></div>
@@ -136,7 +142,7 @@ const DIV = [
 const NEFF_LO = 3, NEFF_HI = 12;
 const SIGMA_FULL = 700, SIGMA_ZERO = 1500;   // meters
 
-const state = { dates: [], idx: 0, size: 2, mode: "nominal", cmpIdx: 0, cmpReal: true,
+const state = { dates: [], idx: 0, size: 2, mode: "nominal", cmpIdx: 0, cmpAdj: "cpi",
                 opacity: 0.75, fade: true, mask: true, dots: false };
 const cache = {};       // date -> {meta, logv: Float32Array, neff: Uint8Array, dots}
 let trends = null, maskData = null, basemap = null;
@@ -202,6 +208,27 @@ function realFactor(date) {
   const c = cpiFor(date);
   return c && trends.cpi_latest ? trends.cpi_latest / c : 1;
 }
+// Deflator values for the change view's "Adjust for" options.  Only ratios
+// between months matter.
+const ADJ = {
+  cpi:    { suffix: " after inflation" },
+  core:   { suffix: " relative to non-housing prices" },
+  income: { suffix: " relative to median income" },
+};
+function adjSeries(kind) {
+  if (!trends) return null;
+  if (kind === "cpi") return trends.cpi;
+  const d = trends.deflators && trends.deflators[kind];
+  return d ? d.values : null;
+}
+function adjAvailable(kind) { return kind === "none" || !!adjSeries(kind); }
+// Factor to multiply a nominal from->to ratio by.
+function adjFactor(kind, from, to) {
+  const s = adjSeries(kind);
+  if (kind === "none" || !s) return 1;
+  const a = s[trends.months.indexOf(from)], b = s[trends.months.indexOf(to)];
+  return a && b ? a / b : 1;
+}
 function money(x) {
   const r = x >= 1000 ? Math.round(x / 10) * 10 : Math.round(x / 5) * 5;
   return "$" + r.toLocaleString("en-US");
@@ -239,8 +266,7 @@ async function render() {
     old = await loadMonth(state.dates[state.cmpIdx]);
     // change for the chosen size: surfaces are 2BR-equivalent, and the size
     // multipliers can drift between the two months
-    state.cmpFactor = (state.cmpReal
-      ? realFactor(date) / realFactor(state.dates[state.cmpIdx]) : 1) *
+    state.cmpFactor = adjFactor(state.cmpAdj, state.dates[state.cmpIdx], date) *
       sizeMult(cur.meta) / old.meta.bedroom_mult[String(state.size)];
   }
   const rf = realFactor(date);
@@ -317,10 +343,19 @@ function drawSummary(cur) {
   if (state.mode === "real") { add(" ("); add(money(city * realFactor(m.date)), true); add(" today)"); }
   el.append(document.createElement("br"));
   add(m.n_new.toLocaleString() + " new listings this month, " + m.n_listed.toLocaleString() + " on the market; the map pools " + m.n_window.toLocaleString() + " from the past year.");
-  if (state.mode !== "nominal" && trends && trends.cpi_latest_month) {
-    el.append(document.createElement("br"));
-    add("Today's dollars = CPI-U as of " + trends.cpi_latest_month + ".");
+  const note = summaryNote();
+  if (note) { el.append(document.createElement("br")); add(note); }
+}
+
+function summaryNote() {
+  if (!trends) return null;
+  if (state.mode === "change") {
+    if (state.cmpAdj === "cpi" && trends.cpi_latest_month) return "Inflation = CPI-U as of " + trends.cpi_latest_month + ".";
+    const d = trends.deflators && trends.deflators[state.cmpAdj];
+    return d ? "Adjusted by " + d.note + "." : null;
   }
+  if (state.mode !== "nominal" && trends.cpi_latest_month) return "Today's dollars = CPI-U as of " + trends.cpi_latest_month + ".";
+  return null;
 }
 
 function lookup(lat, lng) {
@@ -347,7 +382,7 @@ function popupFor(lat, lng) {
       const m = sizeMult(cur.meta), mo = old.meta.bedroom_mult[String(state.size)];
       const ch = Math.exp(cur.logv[i] - old.logv[i]) * state.cmpFactor - 1;
       head.textContent = SIZE_NAMES[state.size] + ": " + money(Math.exp(old.logv[i]) * mo) + " (" + od + ") → " +
-        money(p2 * m) + " (" + date + "), " + pct(ch) + (state.cmpReal ? " after inflation" : "");
+        money(p2 * m) + " (" + date + "), " + pct(ch) + (ADJ[state.cmpAdj] ? ADJ[state.cmpAdj].suffix : "");
     }
   } else {
     head.textContent = "Estimated rent, " + date + (real ? ", today's dollars" : "") + ":";
@@ -450,10 +485,14 @@ function readHash() {
   if (size && +size >= 0 && +size <= 5) state.size = +size;
   if (["nominal", "real", "relative", "change"].includes(h.get("mode"))) state.mode = h.get("mode");
   if (h.get("cmp")) { const i = state.dates.indexOf(h.get("cmp")); if (i >= 0) state.cmpIdx = i; }
+  if (["none", "cpi", "core", "income"].includes(h.get("adj"))) state.cmpAdj = h.get("adj");
 }
 function writeHash() {
   const h = new URLSearchParams({ date: state.dates[state.idx], size: state.size, mode: state.mode });
-  if (state.mode === "change") h.set("cmp", state.dates[state.cmpIdx]);
+  if (state.mode === "change") {
+    h.set("cmp", state.dates[state.cmpIdx]);
+    if (state.cmpAdj !== "cpi") h.set("adj", state.cmpAdj);
+  }
   history.replaceState(null, "", "#" + h.toString());
 }
 function syncControls() {
@@ -462,6 +501,9 @@ function syncControls() {
   document.getElementById("size").value = state.size;
   document.getElementById("mode").value = state.mode;
   document.getElementById("cmp-wrap").style.display = state.mode === "change" ? "" : "none";
+  if (!adjAvailable(state.cmpAdj)) state.cmpAdj = "cpi";
+  for (const o of document.getElementById("cmp-adj").options) o.hidden = !adjAvailable(o.value);
+  document.getElementById("cmp-adj").value = state.cmpAdj;
   document.getElementById("earlier").disabled = state.idx <= 0;
   document.getElementById("later").disabled = state.idx >= state.dates.length - 1;
 }
@@ -498,7 +540,7 @@ async function main() {
   document.getElementById("later").onclick = () => { if (state.idx < state.dates.length - 1) { state.idx++; update(); } };
   document.getElementById("size").onchange = e => { state.size = +e.target.value; update(); };
   document.getElementById("mode").onchange = e => { state.mode = e.target.value; update(); };
-  document.getElementById("cmp-real").onchange = e => { state.cmpReal = e.target.checked; update(); };
+  document.getElementById("cmp-adj").onchange = e => { state.cmpAdj = e.target.value; update(); };
   document.getElementById("opacity").oninput = e => { state.opacity = +e.target.value; update(); };
   for (const k of ["fade", "mask", "dots"]) document.getElementById(k).onchange = e => { state[k] = e.target.checked; update(); };
   document.getElementById("about-link").onclick = e => { e.preventDefault(); const a = document.getElementById("about"); a.style.display = a.style.display === "none" ? "" : "none"; };

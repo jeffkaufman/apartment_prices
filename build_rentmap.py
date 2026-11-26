@@ -11,7 +11,8 @@ when available).  For each full scrape this writes, into OUT_DIR:
   rentmap.<date>.json   metadata: bedroom multipliers, city level, stats, ...
   dots.<date>.json      that month's new listings [lat, lon, bedrooms, rent]
 
-plus dates.json, trends.json, rents_over_time_new.tsv, cpi.csv, and copies
+plus dates.json, trends.json, rents_over_time_new.tsv, cpi.csv,
+cpi_less_shelter.csv, and copies
 of site/*.html and housing_mask.png.
 
 Each month depends only on scrapes up to that month, so existing outputs are
@@ -33,7 +34,9 @@ import urllib.request
 import rentmap
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CPI_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CPIAUCSL"
+FRED_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=%s"
+CPI_SERIES = "CPIAUCSL"            # CPI-U, all items
+CORE_SERIES = "CUSR0000SA0L2"      # CPI-U, all items less shelter
 
 
 def atomic_write(path, data, mode="w"):
@@ -43,12 +46,13 @@ def atomic_write(path, data, mode="w"):
     os.replace(tmp, path)
 
 
-def update_cpi(out_dir):
-    """Fetch CPI-U (FRED CPIAUCSL); fall back to the cached copy."""
-    path = os.path.join(out_dir, "cpi.csv")
+def update_cpi(out_dir, series=CPI_SERIES, fname="cpi.csv"):
+    """Fetch a monthly FRED series (default CPI-U); fall back to the cached
+    copy."""
+    path = os.path.join(out_dir, fname)
     try:
         # FRED rejects some User-Agents; urllib's default works.
-        with urllib.request.urlopen(CPI_URL, timeout=60) as resp:
+        with urllib.request.urlopen(FRED_URL % series, timeout=60) as resp:
             body = resp.read().decode()
         if body.startswith("observation_date"):
             atomic_write(path, body)
@@ -59,7 +63,7 @@ def update_cpi(out_dir):
         with open(path) as inf:
             for row in csv.DictReader(inf):
                 try:
-                    cpi[row["observation_date"][:7]] = float(row["CPIAUCSL"])
+                    cpi[row["observation_date"][:7]] = float(row[series])
                 except ValueError:
                     pass
     return cpi
@@ -73,6 +77,33 @@ def cpi_for(cpi, date):
         return cpi[month]
     earlier = [m for m in cpi if m <= month]
     return cpi[max(earlier)] if earlier else None
+
+
+def load_income():
+    """Monthly median household income for the map area from
+    area_income.json (see build_area_income.py).  Annual values sit at
+    mid-year and are interpolated in log space; past the last year they are
+    extended at the series' average growth rate."""
+    path = os.path.join(HERE, "area_income.json")
+    if not os.path.exists(path):
+        return None, None
+    with open(path) as inf:
+        annual = {int(y): math.log(v) for y, v in json.load(inf)["annual"].items()}
+    y0, y1 = min(annual), max(annual)
+    g = (annual[y1] - annual[y0]) / (y1 - y0)
+    ys = sorted(annual)
+
+    def at(date):
+        y, m = int(date[:4]), int(date[5:7])
+        t = y + (m - 0.5) / 12 - 0.5
+        if t <= y0:
+            return math.exp(annual[y0] + g * (t - y0))
+        if t >= y1:
+            return math.exp(annual[y1] + g * (t - y1))
+        a = max(v for v in ys if v <= t)
+        b = min(v for v in ys if v > t)
+        return math.exp(annual[a] + (annual[b] - annual[a]) * (t - a) / (b - a))
+    return at, y1
 
 
 def build_months(ds, out_dir, force):
@@ -108,7 +139,7 @@ def build_months(ds, out_dir, force):
     return sorted(set(done))
 
 
-def build_trends(out_dir, dates, cpi):
+def build_trends(out_dir, dates, cpi, core=None):
     metas = []
     for d in dates:
         with open(os.path.join(out_dir, "rentmap.%s.json" % d)) as inf:
@@ -119,12 +150,25 @@ def build_trends(out_dir, dates, cpi):
         "cpi": [cpi_for(cpi, d) for d in dates],
         "cpi_latest": cpi[max(cpi)] if cpi else None,
         "cpi_latest_month": max(cpi) if cpi else None,
+        # Alternative deflators for the change view.  Only ratios between
+        # months matter, so the units are arbitrary.
+        "deflators": {},
         "city_2br": [m["city_2br"] for m in metas],
         "n_listed": [m["n_listed"] for m in metas],
         "n_new": [m["n_new"] for m in metas],
         "bedroom_mult": {b: [m["bedroom_mult"][b] for m in metas] for b in sizes},
         "places": {},
     }
+    if core:
+        t["deflators"]["core"] = {
+            "values": [cpi_for(core, d) for d in dates],
+            "note": "CPI-U less shelter, as of %s" % max(core)}
+    income_at, income_last = load_income()
+    if income_at:
+        t["deflators"]["income"] = {
+            "values": [round(income_at(d), 1) for d in dates],
+            "note": "median household income in the map area (Census ACS "
+                    "through %d, extrapolated after)" % income_last}
     for kind in ("new", "all"):
         for stat in ("median", "p25", "p75", "n"):
             t["%s_%s" % (kind, stat)] = {
@@ -168,9 +212,10 @@ def main(argv):
     ds = rentmap.Dataset(data_dir)
     print("loaded %d scrapes in %.0fs" % (len(ds.scrapes), time.time() - t0))
     cpi = update_cpi(out_dir)
+    core = update_cpi(out_dir, CORE_SERIES, "cpi_less_shelter.csv")
     dates = build_months(ds, out_dir, force)
     atomic_write(os.path.join(out_dir, "dates.json"), json.dumps(dates))
-    build_trends(out_dir, dates, cpi)
+    build_trends(out_dir, dates, cpi, core)
     for fn in os.listdir(os.path.join(HERE, "site")):
         shutil.copy(os.path.join(HERE, "site", fn), os.path.join(out_dir, fn))
     shutil.copy(os.path.join(HERE, "housing_mask.png"),
