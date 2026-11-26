@@ -12,7 +12,7 @@ when available).  For each full scrape this writes, into OUT_DIR:
   dots.<date>.json      that month's new listings [lat, lon, bedrooms, rent]
 
 plus dates.json, trends.json, rents_over_time_new.tsv, cpi.csv,
-cpi_less_shelter.csv, and copies
+cpi_less_shelter.csv, cpi_w.csv, and copies
 of site/*.html and housing_mask.png.
 
 Each month depends only on scrapes up to that month, so existing outputs are
@@ -37,6 +37,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 FRED_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=%s"
 CPI_SERIES = "CPIAUCSL"            # CPI-U, all items
 CORE_SERIES = "CUSR0000SA0L2"      # CPI-U, all items less shelter
+CPIW_SERIES = "CWUR0000SA0"        # CPI-W, not seasonally adjusted (drives COLAs)
 
 
 def atomic_write(path, data, mode="w"):
@@ -106,6 +107,45 @@ def load_income():
     return at, y1
 
 
+def social_security_colas(cpiw):
+    """Social Security COLAs computed from CPI-W the way SSA does it: the
+    July-September average of CPI-W is compared with the same average from
+    the last year that produced a COLA, rounded to 0.1%, and zero if prices
+    fell.  Returns {year: cola}; the COLA for year Y applies to December
+    benefits, which are paid in January of Y+1."""
+    colas, base = {}, None
+    for y in sorted({int(m[:4]) for m in cpiw}):
+        q = ["%d-%02d" % (y, mo) for mo in (7, 8, 9)]
+        if not all(m in cpiw for m in q):
+            continue
+        q3 = sum(cpiw[m] for m in q) / 3
+        if base is None:
+            base = q3
+            continue
+        cola = round((q3 / base - 1) * 1000) / 1000
+        if cola > 0:
+            colas[y] = cola
+            base = q3
+        else:
+            colas[y] = 0.0
+    return colas
+
+
+def social_security_level(colas):
+    """Relative size of a Social Security check received in a given month.
+    A check reflects only COLAs first paid by then, so it trails inflation:
+    the January check includes the COLA set from the previous July-September
+    prices, and that stays fixed for twelve months."""
+    def at(date):
+        y, m = int(date[:4]), int(date[5:7])
+        level = 1.0
+        for cy, c in colas.items():
+            if cy + 1 <= y:   # first paid in January of cy+1
+                level *= 1 + c
+        return level
+    return at
+
+
 def build_months(ds, out_dir, force):
     params = rentmap.params_dict()
     fit_sm = rentmap.Smoother(rentmap.Grid(rentmap.FIT_PX))
@@ -139,7 +179,7 @@ def build_months(ds, out_dir, force):
     return sorted(set(done))
 
 
-def build_trends(out_dir, dates, cpi, core=None):
+def build_trends(out_dir, dates, cpi, core=None, cpiw=None):
     metas = []
     for d in dates:
         with open(os.path.join(out_dir, "rentmap.%s.json" % d)) as inf:
@@ -163,6 +203,17 @@ def build_trends(out_dir, dates, cpi, core=None):
         t["deflators"]["core"] = {
             "values": [cpi_for(core, d) for d in dates],
             "note": "CPI-U less shelter, as of %s" % max(core)}
+    if cpiw:
+        colas = social_security_colas(cpiw)
+        ss_at = social_security_level(colas)
+        paid = [y for y in colas if y + 1 <= int(dates[-1][:4])]
+        t["deflators"]["ss"] = {
+            "values": [round(ss_at(d), 5) for d in dates],
+            "colas": {str(y): c for y, c in colas.items() if y >= 2012},
+            "note": "Social Security benefits: each January's check gets a "
+                    "COLA based on CPI-W from the previous July-September "
+                    "(latest: %.1f%%, paid since January %d)" % (
+                        colas[max(paid)] * 100, max(paid) + 1)}
     income_at, income_last = load_income()
     if income_at:
         t["deflators"]["income"] = {
@@ -213,9 +264,10 @@ def main(argv):
     print("loaded %d scrapes in %.0fs" % (len(ds.scrapes), time.time() - t0))
     cpi = update_cpi(out_dir)
     core = update_cpi(out_dir, CORE_SERIES, "cpi_less_shelter.csv")
+    cpiw = update_cpi(out_dir, CPIW_SERIES, "cpi_w.csv")
     dates = build_months(ds, out_dir, force)
     atomic_write(os.path.join(out_dir, "dates.json"), json.dumps(dates))
-    build_trends(out_dir, dates, cpi, core)
+    build_trends(out_dir, dates, cpi, core, cpiw)
     for fn in os.listdir(os.path.join(HERE, "site")):
         shutil.copy(os.path.join(HERE, "site", fn), os.path.join(out_dir, fn))
     shutil.copy(os.path.join(HERE, "housing_mask.png"),

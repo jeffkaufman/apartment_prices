@@ -93,7 +93,10 @@ metadata.  The page colors it client-side, which enables:
   non-housing prices (CPI-U less shelter, also from FRED), or median
   household income in the map area (`area_income.json`; refresh it each
   fall with `build_area_income.py` when new 1-year ACS data comes out,
-  otherwise later months are extrapolated at the long-run growth rate);
+  otherwise later months are extrapolated at the long-run growth rate), or
+  Social Security benefits (COLAs computed from CPI-W the way SSA does; a
+  check in a given month only has COLAs first paid by then, so it trails
+  inflation by up to a year and a half);
 - exact values on click for every size, with how much data they rest on;
 - this month's new listings as dots, opacity, fade and mask toggles.
 
