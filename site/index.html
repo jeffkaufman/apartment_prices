@@ -93,7 +93,6 @@
       <option value="core">Non-housing prices</option>
       <option value="income">Median income</option>
       <option value="ss">Social Security benefits</option>
-      <option value="retiree">Retiree's 401(k) income</option>
     </select>
   </div>
 
@@ -217,7 +216,6 @@ const ADJ = {
   core:   { suffix: " relative to non-housing prices" },
   income: { suffix: " relative to median income" },
   ss:     { suffix: " relative to Social Security benefits" },
-  retiree: { suffix: " relative to a retiree's 401(k) income" },
 };
 function adjSeries(kind) {
   if (!trends) return null;
@@ -489,7 +487,7 @@ function readHash() {
   if (size && +size >= 0 && +size <= 5) state.size = +size;
   if (["nominal", "real", "relative", "change"].includes(h.get("mode"))) state.mode = h.get("mode");
   if (h.get("cmp")) { const i = state.dates.indexOf(h.get("cmp")); if (i >= 0) state.cmpIdx = i; }
-  if (["none", "cpi", "core", "income", "ss", "retiree"].includes(h.get("adj"))) state.cmpAdj = h.get("adj");
+  if (["none", "cpi", "core", "income", "ss"].includes(h.get("adj"))) state.cmpAdj = h.get("adj");
 }
 function writeHash() {
   const h = new URLSearchParams({ date: state.dates[state.idx], size: state.size, mode: state.mode });
