@@ -96,7 +96,9 @@ metadata.  The page colors it client-side, which enables:
   otherwise later months are extrapolated at the long-run growth rate), or
   Social Security benefits (COLAs computed from CPI-W the way SSA does; a
   check in a given month only has COLAs first paid by then, so it trails
-  inflation by up to a year and a half);
+  inflation by about 5 to 16 months), or a retiree's 401(k) income (4% a
+  year of the previous December's balance in Vanguard's target-date
+  retirement income fund, VTINX, total return from Yahoo Finance);
 - exact values on click for every size, with how much data they rest on;
 - this month's new listings as dots, opacity, fade and mask toggles.
 

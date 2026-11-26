@@ -12,7 +12,7 @@ when available).  For each full scrape this writes, into OUT_DIR:
   dots.<date>.json      that month's new listings [lat, lon, bedrooms, rent]
 
 plus dates.json, trends.json, rents_over_time_new.tsv, cpi.csv,
-cpi_less_shelter.csv, cpi_w.csv, and copies
+cpi_less_shelter.csv, cpi_w.csv, retiree_fund.json, and copies
 of site/*.html and housing_mask.png.
 
 Each month depends only on scrapes up to that month, so existing outputs are
@@ -38,6 +38,11 @@ FRED_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=%s"
 CPI_SERIES = "CPIAUCSL"            # CPI-U, all items
 CORE_SERIES = "CUSR0000SA0L2"      # CPI-U, all items less shelter
 CPIW_SERIES = "CWUR0000SA0"        # CPI-W, not seasonally adjusted (drives COLAs)
+# Vanguard Target Retirement Income Fund: a typical retiree's 401(k) holding.
+RETIREE_FUND = "VTINX"
+RETIREE_URL = ("https://query1.finance.yahoo.com/v8/finance/chart/%s"
+               "?period1=1325376000&period2=%d&interval=1mo")
+RETIREE_DRAW = 0.04                # share of the balance withdrawn each year
 
 
 def atomic_write(path, data, mode="w"):
@@ -146,6 +151,48 @@ def social_security_level(colas):
     return at
 
 
+def update_retiree_fund(out_dir):
+    """Monthly total-return index (dividends reinvested) for RETIREE_FUND,
+    from Yahoo Finance; falls back to the cached copy.  Returns
+    {"YYYY-MM": value at the end of that month}."""
+    path = os.path.join(out_dir, "retiree_fund.json")
+    try:
+        req = urllib.request.Request(
+            RETIREE_URL % (RETIREE_FUND, int(time.time()) + 86400 * 31),
+            headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            r = json.load(resp)["chart"]["result"][0]
+        vals = {}
+        for ts, v in zip(r["timestamp"], r["indicators"]["adjclose"][0]["adjclose"]):
+            if v is not None:
+                vals[time.strftime("%Y-%m", time.gmtime(ts))] = v
+        if len(vals) > 100:
+            atomic_write(path, json.dumps(vals, sort_keys=True))
+    except Exception as e:
+        print("%s fetch failed (%s); using cached copy" % (RETIREE_FUND, e))
+    if not os.path.exists(path):
+        return None
+    with open(path) as inf:
+        return json.load(inf)
+
+
+def retiree_income_level(fund):
+    """Relative yearly income of a retiree who holds RETIREE_FUND and
+    withdraws RETIREE_DRAW of the balance each year, set from the balance at
+    the end of the previous December (like required minimum distributions).
+    The balance grows with the fund's total return, less the withdrawals."""
+    months = sorted(fund)
+    first_year = int(months[0][:4])
+
+    def at(date):
+        y = int(date[:4])
+        dec = [m for m in months if m <= "%d-12" % (y - 1)]
+        if not dec:
+            return None
+        return fund[dec[-1]] * (1 - RETIREE_DRAW) ** (y - first_year)
+    return at
+
+
 def build_months(ds, out_dir, force):
     params = rentmap.params_dict()
     fit_sm = rentmap.Smoother(rentmap.Grid(rentmap.FIT_PX))
@@ -179,7 +226,7 @@ def build_months(ds, out_dir, force):
     return sorted(set(done))
 
 
-def build_trends(out_dir, dates, cpi, core=None, cpiw=None):
+def build_trends(out_dir, dates, cpi, core=None, cpiw=None, fund=None):
     metas = []
     for d in dates:
         with open(os.path.join(out_dir, "rentmap.%s.json" % d)) as inf:
@@ -214,6 +261,14 @@ def build_trends(out_dir, dates, cpi, core=None, cpiw=None):
                     "COLA based on CPI-W from the previous July-September "
                     "(latest: %.1f%%, paid since January %d)" % (
                         colas[max(paid)] * 100, max(paid) + 1)}
+    if fund:
+        ret_at = retiree_income_level(fund)
+        t["deflators"]["retiree"] = {
+            "values": [ret_at(d) and round(ret_at(d), 5) for d in dates],
+            "note": "a retiree's 401(k) income: %d%% of the previous "
+                    "December's balance in a target-date retirement income "
+                    "fund (%s, dividends reinvested)" % (
+                        RETIREE_DRAW * 100, RETIREE_FUND)}
     income_at, income_last = load_income()
     if income_at:
         t["deflators"]["income"] = {
@@ -265,9 +320,10 @@ def main(argv):
     cpi = update_cpi(out_dir)
     core = update_cpi(out_dir, CORE_SERIES, "cpi_less_shelter.csv")
     cpiw = update_cpi(out_dir, CPIW_SERIES, "cpi_w.csv")
+    fund = update_retiree_fund(out_dir)
     dates = build_months(ds, out_dir, force)
     atomic_write(os.path.join(out_dir, "dates.json"), json.dumps(dates))
-    build_trends(out_dir, dates, cpi, core, cpiw)
+    build_trends(out_dir, dates, cpi, core, cpiw, fund)
     for fn in os.listdir(os.path.join(HERE, "site")):
         shutil.copy(os.path.join(HERE, "site", fn), os.path.join(out_dir, fn))
     shutil.copy(os.path.join(HERE, "housing_mask.png"),
